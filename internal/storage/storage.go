@@ -95,7 +95,7 @@ func NewStorage(location string) (*Storage, error) {
 		ModulesPath:       filepath.Join(location, "modules"),
 		done:              make(chan struct{}),
 	}
-	// Create Downlaod directory.
+	// Create Download directory.
 	if err := os.MkdirAll(this.DownloadPath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create download directory: %v", err)
 	}

@@ -74,10 +74,10 @@ func TestDownloadToFile(t *testing.T) {
 			defer srv.close()
 			name := filepath.Join(dir, art.FileName)
 
-			// 1. Resume downlaod of corrupted temporary file.
+			// 1. Resume download of corrupted temporary file.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "wrong start")
 			if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
-				t.Fatal("downlaod of corrupted temporary file must fail")
+				t.Fatal("download of corrupted temporary file must fail")
 			}
 
 			// 2. Cancel in the middle of the download operation.
