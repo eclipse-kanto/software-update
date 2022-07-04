@@ -35,7 +35,7 @@ func (f *ScriptBasedSoftwareUpdatable) downloadHandler(
 // returns true if canceled!
 func (f *ScriptBasedSoftwareUpdatable) downloadModules(
 	toDir string, updatable *storage.Updatable, su *hawkbit.SoftwareUpdatable) bool {
-	// Process downlaod operation.
+	// Process download operation.
 	logger.Debugf("Process download operation with id: %s", updatable.CorrelationID)
 
 	// Download all modules.
@@ -68,7 +68,7 @@ func (f *ScriptBasedSoftwareUpdatable) downloadModules(
 // downloadModule returns true if canceled!
 func (f *ScriptBasedSoftwareUpdatable) downloadModule(
 	cid string, module *storage.Module, toDir string, su *hawkbit.SoftwareUpdatable) bool {
-	// Downlaod module to direcotry.
+	// Download module to direcotry.
 	logger.Infof("Download module [%s.%s] to directory: %s", module.Name, module.Version, toDir)
 	// Create few useful variables.
 	id := module.Name + ":" + module.Version
