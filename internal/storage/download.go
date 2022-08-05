@@ -16,11 +16,13 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"hash"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,7 +77,7 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, don
 		}
 	} else {
 		// No available previous download, perform a full download.
-		response, err := http.Get(artifact.Link)
+		response, err := getDownloadResponse(artifact.Link, 0)
 		if err != nil {
 			return err
 		}
@@ -104,8 +106,7 @@ func resume(to string, offset int64, artifact *Artifact, progress progressBytes,
 	request.Header.Set("Range", fmt.Sprintf("bytes=%v-", offset))
 
 	// Send the HTTP request and get its response.
-	client := &http.Client{}
-	response, err := client.Do(request)
+	response, err := getDownloadResponse(artifact.Link, offset)
 	if err != nil {
 		return err
 	}
@@ -141,6 +142,38 @@ func resume(to string, offset int64, artifact *Artifact, progress progressBytes,
 		return err
 	}
 	return validate(to, artifact.HashType, artifact.HashValue)
+}
+
+func getDownloadResponse(link string, offset int64) (*http.Response, error) {
+	// Create new HTTP request with Range header.
+	request, err := http.NewRequest(http.MethodGet, link, nil)
+	if err != nil {
+		return nil, err
+	}
+	if offset > 0 {
+		request.Header.Set("Range", fmt.Sprintf("bytes=%v-", offset))
+	}
+
+	var transport http.Transport
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	if u.Scheme == "https" {
+		config := &tls.Config{ // using the system CA pool
+			InsecureSkipVerify: false,
+			MinVersion:         tls.VersionTLS12,
+			MaxVersion:         tls.VersionTLS13,
+			CipherSuites:       supportedCipherSuites(),
+		}
+		transport = http.Transport{
+			TLSClientConfig: config,
+		}
+	}
+
+	// Send the HTTP request and get its response.
+	client := &http.Client{Transport: &transport}
+	return client.Do(request)
 }
 
 func download(to string, in io.ReadCloser, artifact *Artifact, progress progressBytes, done chan struct{}) error {
@@ -237,4 +270,13 @@ func checksum(fName string, hashType string) ([]byte, error) {
 		return nil, err
 	}
 	return hType.Sum(nil), nil
+}
+
+func supportedCipherSuites() []uint16 {
+	cs := tls.CipherSuites()
+	cid := make([]uint16, len(cs))
+	for i := range cs {
+		cid[i] = cs[i].ID
+	}
+	return cid
 }
