@@ -21,8 +21,11 @@ import (
 )
 
 const (
-	testDirFeature  = "_tmp-feature"
-	testDefaultHost = ":12345"
+	testDirFeature        = "_tmp-feature"
+	testDefaultHost       = ":12345"
+	testDefaultHostSecure = ":12346"
+	testCert              = "storage/testdata/cert.pem"
+	testKey               = "storage/testdata/key.pem"
 )
 
 // TestScriptBasedConstructor tests NewScriptBasedSU with wrong broker URL.
@@ -111,8 +114,11 @@ func TestScriptBasedCore(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// Prepare/Close simple HTTP server used to host testing artifacts
-	w := host(testDefaultHost, t).addInstallScript()
+	w := host(testDefaultHost, "", "", t).addInstallScript()
 	defer w.close()
+
+	wSecure := host(testDefaultHostSecure, testCert, testKey, t).addInstallScript()
+	defer wSecure.close()
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable.
 	feature, mc, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
@@ -122,12 +128,20 @@ func TestScriptBasedCore(t *testing.T) {
 	}
 	defer feature.Disconnect()
 
+	testDownloadInstall(feature, mc, w.getSoftwareArtifacts(false, "install"), t)
+
+	feature.cert = testCert
+	feature.key = testKey
+	testDownloadInstall(feature, mc, wSecure.getSoftwareArtifacts(true, "install"), t)
+}
+
+func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifacts []*hawkbit.SoftwareArtifactAction, t *testing.T) {
 	// Preapare simple software update action.
 	sua := &hawkbit.SoftwareUpdateAction{
 		CorrelationID: "test-correlation-id",
 		SoftwareModules: []*hawkbit.SoftwareModuleAction{{
 			SoftwareModule: &hawkbit.SoftwareModuleID{Name: "test", Version: "1.0.0"},
-			Artifacts:      w.getSoftwareArtifacts("install"),
+			Artifacts:      artifacts,
 			Metadata:       map[string]string{"artifact-type": "plane"},
 		}},
 	}

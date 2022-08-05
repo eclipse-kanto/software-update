@@ -37,6 +37,8 @@ const (
 	flagLogFileSize     = "logFileSize"
 	flagLogFileCount    = "logFileCount"
 	flagLogFileMaxAge   = "logFileMaxAge"
+	flagCert            = "cert"
+	flagKey             = "key"
 
 	defaultBroker          = "tcp://localhost:1883"
 	defaultUsername        = ""
@@ -50,6 +52,8 @@ const (
 	defaultLogFileSize     = 2
 	defaultLogFileCount    = 5
 	defaultLogFileMaxAge   = 28
+	defaultCertFile        = ""
+	defaultCertKey         = ""
 )
 
 var (
@@ -66,6 +70,8 @@ type cfg struct {
 	ModuleType      string   `json:"moduleType"`
 	ArtifactType    string   `json:"artifactType"`
 	Install         []string `json:"install"`
+	Cert            string   `json:"cert"`
+	Key             string   `json:"key"`
 	LogFile         string   `json:"logFile"`
 	LogLevel        string   `json:"logLevel"`
 	LogFileSize     int      `json:"logFileSize"`
@@ -91,6 +97,9 @@ func InitFlags(version string) (*ScriptBasedSoftwareUpdatableConfig, *logger.Log
 	flag.StringVar(&flg.ModuleType, flagModuleType, defaultModuleType, "Module type of SoftwareUpdatable")
 	flag.StringVar(&flg.ArtifactType, flagArtifactType, defaultArtifactType,
 		"Defines the module artifact type: archive or plane")
+
+	flag.StringVar(&flg.Cert, flagCert, defaultCertFile, "A PEM encoded certificate `file` for secure artifact download")
+	flag.StringVar(&flg.Key, flagKey, defaultCertKey, "A PEM encoded unencrypted private key for secure artifact download")
 
 	flag.StringVar(&flg.LogFile, flagLogFile, defaultLogFile, "Log file location in storage directory")
 	flag.StringVar(&flg.LogLevel, flagLogLevel, defaultLogLevel, "Log levels are ERROR, WARNING, INFO, DEBUG, TRACE")
@@ -129,6 +138,10 @@ func applyFlags(flg *cfg) {
 			suConfig.ModuleType = flg.ModuleType
 		case flagArtifactType:
 			suConfig.ArtifactType = flg.ArtifactType
+		case flagCert:
+			suConfig.Cert = flg.Cert
+		case flagKey:
+			suConfig.Key = flg.Key
 		case flagLogFile:
 			logConfig.LogFile = flg.LogFile
 		case flagLogLevel:

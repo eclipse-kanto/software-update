@@ -15,8 +15,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,6 +33,11 @@ var (
 	testOnceSimple sync.Once
 )
 
+const (
+	testCertFile = "testdata/cert.pem"
+	testCertKey  = "testdata/key.pem"
+)
+
 type web struct {
 	name string
 	size int64
@@ -38,9 +45,9 @@ type web struct {
 	t    *testing.T
 }
 
-// TestDownloadToFile tests downloadToFile function.
+// TestDownloadToFile tests downloadToFile function, using non-secure protocol(s).
 func TestDownloadToFile(t *testing.T) {
-	arts := []*Artifact{
+	testDownloadToFile([]*Artifact{
 		{ // An Artifact with MD5 checksum.
 			FileName: "test.txt", Size: 65536, Link: "http://localhost:43234/test.txt",
 			HashType:  "MD5",
@@ -56,8 +63,56 @@ func TestDownloadToFile(t *testing.T) {
 			HashType:  "SHA256",
 			HashValue: "4eefb9a7a40a8b314b586a00f307157043c0bbe4f59fa39cba88773680758bc3",
 		},
-	}
+	}, "", "", t)
+}
 
+// TestDownloadToFileSecureSystemPool tests downloadToFile function, using secure protocol(s) and certificates from system pool.
+func TestDownloadToFileSecureSystemPool(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("this test only runs on Linux.")
+	}
+	sslCertFile := os.Getenv("SSL_CERT_FILE")
+	certFiles := strings.Split(sslCertFile, string(os.PathListSeparator))
+	containsTestCert := false
+	for _, file := range certFiles {
+		if strings.HasSuffix(strings.TrimSpace(file), filepath.Base(testCertFile)) {
+			containsTestCert = true
+			break
+		}
+	}
+	if !containsTestCert {
+		t.Skipf("Please set SSL_CERT_FILE variable to point to the location"+
+			" of %s certificate file. Current value is \"%s\".", testCertFile, sslCertFile)
+	}
+	testDownloadToFileSecure("", "", t)
+}
+
+// TestDownloadToFileSecureCustomCertificate tests downloadToFile function, using secure protocol(s) and a custom certificate.
+func TestDownloadToFileSecureCustomCertificate(t *testing.T) {
+	testDownloadToFileSecure(testCertFile, testCertKey, t)
+}
+
+func testDownloadToFileSecure(certFile, certKey string, t *testing.T) {
+	testDownloadToFile([]*Artifact{
+		{ // An Artifact with MD5 checksum.
+			FileName: "test.txt", Size: 65536, Link: "https://localhost:43234/test.txt",
+			HashType:  "MD5",
+			HashValue: "ab2ce340d36bbaafe17965a3a2c6ed5b",
+		},
+		{ // An Artifact with SHA1 checksum.
+			FileName: "test.txt", Size: 65536, Link: "https://localhost:43234/test.txt",
+			HashType:  "SHA1",
+			HashValue: "cd3848697cb42f5be9902f6523ec516d21a8c677",
+		},
+		{ // An Artifact with SHA256 checksum.
+			FileName: "test.txt", Size: 65536, Link: "https://localhost:43234/test.txt",
+			HashType:  "SHA256",
+			HashValue: "4eefb9a7a40a8b314b586a00f307157043c0bbe4f59fa39cba88773680758bc3",
+		},
+	}, certFile, certKey, t)
+}
+
+func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T) {
 	for _, art := range arts {
 		t.Run(art.HashType, func(t *testing.T) {
 			// Prepare
@@ -70,13 +125,13 @@ func TestDownloadToFile(t *testing.T) {
 			defer os.RemoveAll(dir)
 
 			// Start Web server
-			srv := host(":43234", art.FileName, int64(art.Size), false, t)
+			srv := host(":43234", art.FileName, int64(art.Size), false, isSecure(art.Link, t), t)
 			defer srv.close()
 			name := filepath.Join(dir, art.FileName)
 
 			// 1. Resume downlaod of corrupted temporary file.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "wrong start")
-			if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+			if err := downloadArtifact(name, art, nil, certFile, certKey, make(chan struct{})); err == nil {
 				t.Fatal("downlaod of corrupted temporary file must fail")
 			}
 
@@ -85,7 +140,7 @@ func TestDownloadToFile(t *testing.T) {
 			callback := func(bytes int64) {
 				close(done)
 			}
-			if err := downloadArtifact(name, art, callback, done); err != ErrCancel {
+			if err := downloadArtifact(name, art, callback, certFile, certKey, done); err != ErrCancel {
 				t.Fatalf("failed to cancel download operation: %v", err)
 			}
 			if _, err := os.Stat(filepath.Join(dir, prefix+art.FileName)); os.IsNotExist(err) {
@@ -94,13 +149,13 @@ func TestDownloadToFile(t *testing.T) {
 
 			// 3. Resume previous download operation.
 			callback = func(bytes int64) { /* Do nothing. */ }
-			if err := downloadArtifact(name, art, callback, make(chan struct{})); err != nil {
+			if err := downloadArtifact(name, art, callback, certFile, certKey, make(chan struct{})); err != nil {
 				t.Fatalf("failed to download artifact: %v", err)
 			}
 			check(name, art.Size, t)
 
 			// 4. Download available file.
-			if err := downloadArtifact(name, art, callback, make(chan struct{})); err != nil {
+			if err := downloadArtifact(name, art, callback, certFile, certKey, make(chan struct{})); err != nil {
 				t.Fatalf("failed to download artifact: %v", err)
 			}
 			check(name, art.Size, t)
@@ -113,14 +168,14 @@ func TestDownloadToFile(t *testing.T) {
 			// 5. Try to resume with file bigger than expected.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "1111111111111")
 			art.Size -= 10
-			if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+			if err := downloadArtifact(name, art, nil, certFile, certKey, make(chan struct{})); err == nil {
 				t.Fatal("validate resume with file bigger than expected")
 			}
 
 			// 5. Try to resume from missing link.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "1111111111111")
 			art.Link = "http://localhost:43234/test-missing.txt"
-			if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+			if err := downloadArtifact(name, art, nil, "", "", make(chan struct{})); err == nil {
 				t.Fatal("failed to validate with missing link")
 			}
 		})
@@ -145,39 +200,39 @@ func TestDownloadToFileError(t *testing.T) {
 	}
 
 	// Start Web server
-	srv := host(":43234", art.FileName, int64(art.Size), true, t)
+	srv := host(":43234", art.FileName, int64(art.Size), true, isSecure(art.Link, t), t)
 	defer srv.close()
 	name := filepath.Join(dir, art.FileName)
 
 	// 1. Resume is not supported.
 	WriteLn(filepath.Join(dir, prefix+art.FileName), "1111")
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err != nil {
+	if err := downloadArtifact(name, art, nil, "", "", make(chan struct{})); err != nil {
 		t.Fatalf("failed to download file artifact: %v", err)
 	}
 	check(name, art.Size, t)
 
 	// 2. Try with missing checksum.
 	art.HashValue = ""
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", "", make(chan struct{})); err == nil {
 		t.Fatal("validatted with missing checksum")
 	}
 
 	// 3. Try with missing link.
 	art.Link = "http://localhost:43234/test-missing.txt"
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", "", make(chan struct{})); err == nil {
 		t.Fatal("failed to validate with missing link")
 	}
 
 	// 4. Try with wrong checksum type.
 	art.Link = "http://localhost:43234/test-simple.txt"
 	art.HashType = ""
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", "", make(chan struct{})); err == nil {
 		t.Fatal("validate with wrong checksum type")
 	}
 
 	// 5. Try with wrong checksum format.
 	art.HashValue = ";;"
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", "", make(chan struct{})); err == nil {
 		t.Fatal("validate with wrong checksum format")
 	}
 
@@ -185,7 +240,7 @@ func TestDownloadToFileError(t *testing.T) {
 	art.HashType = "MD5"
 	art.HashValue = "ab2ce340d36bbaafe17965a3a2c6ed5b"
 	art.Size -= 10
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", "", make(chan struct{})); err == nil {
 		t.Fatal("validate with file bigger than expected")
 	}
 }
@@ -198,7 +253,7 @@ func check(name string, expected int, t *testing.T) {
 }
 
 // host create and start a HTTP server.
-func host(addr string, name string, size int64, simple bool, t *testing.T) *web {
+func host(addr string, name string, size int64, simple bool, secure bool, t *testing.T) *web {
 	// Create new HTTP server.
 	w := &web{name: name, size: size, srv: &http.Server{Addr: addr}, t: t}
 
@@ -209,12 +264,20 @@ func host(addr string, name string, size int64, simple bool, t *testing.T) *web 
 		testOnceRange.Do(func() { http.HandleFunc(fmt.Sprintf("/%s", name), w.handlerRange) })
 	}
 
-	// Start HTTP server in separate goroute.
-	go func() {
-		if err := w.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			t.Errorf("failed to start web server: %v", err)
-		}
-	}()
+	// Start HTTP server in separate go routine.
+	if secure {
+		go func() {
+			if err := w.srv.ListenAndServeTLS(testCertFile, testCertKey); err != nil && err != http.ErrServerClosed {
+				t.Errorf("failed to start web server: %v", err)
+			}
+		}()
+	} else {
+		go func() {
+			if err := w.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				t.Errorf("failed to start web server: %v", err)
+			}
+		}()
+	}
 
 	time.Sleep(1 * time.Second)
 
@@ -296,4 +359,12 @@ func write(writer http.ResponseWriter, size int64) {
 	}
 	remainder := size % s
 	writer.Write(b[:remainder])
+}
+
+func isSecure(link string, t *testing.T) bool {
+	u, err := url.Parse(link)
+	if err != nil {
+		t.Fatalf("cannot parse url %v", link)
+	}
+	return u.Scheme == "https"
 }

@@ -274,15 +274,23 @@ type testWeb struct {
 }
 
 // host create and start a HTTP server.
-func host(addr string, t *testing.T) *testWeb {
-	// Create new HTTP server.
+func host(addr, certFile, certKey string, t *testing.T) *testWeb {
+	// Create new HTTP(S) server.
 	w := &testWeb{addr: addr, srv: &http.Server{Addr: addr}, t: t}
-	// Start HTTP server in separate goroute.
-	go func() {
-		if err := w.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			t.Errorf("failed to start web server: %v", err)
-		}
-	}()
+	// Start HTTP(S) server in separate goroute.
+	if len(certFile) > 0 {
+		go func() {
+			if err := w.srv.ListenAndServeTLS(certFile, certKey); err != nil && err != http.ErrServerClosed {
+				t.Errorf("failed to start web server: %v", err)
+			}
+		}()
+	} else {
+		go func() {
+			if err := w.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				t.Errorf("failed to start web server: %v", err)
+			}
+		}()
+	}
 	return w
 }
 
@@ -313,7 +321,13 @@ func (w *testWeb) close() {
 }
 
 // getSoftwareArtifacts generates array of SoftwareArtifactAction based on the registered HTTP aliases with the given names.
-func (w *testWeb) getSoftwareArtifacts(names ...string) []*hawkbit.SoftwareArtifactAction {
+func (w *testWeb) getSoftwareArtifacts(secure bool, names ...string) []*hawkbit.SoftwareArtifactAction {
+	var protocol hawkbit.Protocol
+	if secure {
+		protocol = hawkbit.HTTPS
+	} else {
+		protocol = hawkbit.HTTP
+	}
 	res := make([]*hawkbit.SoftwareArtifactAction, len(names))
 	for i, name := range names {
 		// If alias name is "install", add its file extension: Windows = .bat | Linux/Mac/etc = .sh
@@ -336,7 +350,7 @@ func (w *testWeb) getSoftwareArtifacts(names ...string) []*hawkbit.SoftwareArtif
 		res[i] = &hawkbit.SoftwareArtifactAction{
 			Filename: alias,
 			Download: map[hawkbit.Protocol]*hawkbit.Links{
-				hawkbit.HTTP: {URL: fmt.Sprintf("http://localhost%s/%s", w.addr, alias)},
+				protocol: {URL: fmt.Sprintf("%v://localhost%s/%s", protocol, w.addr, alias)},
 			},
 			Checksums: map[hawkbit.Hash]string{
 				hawkbit.SHA256: hash,

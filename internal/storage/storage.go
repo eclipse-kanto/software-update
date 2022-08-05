@@ -211,7 +211,7 @@ func (st *Storage) ArchiveModule(dir string) error {
 }
 
 // DownloadModule artifacts to local storage.
-func (st *Storage) DownloadModule(toDir string, module *Module, progress Progress) (err error) {
+func (st *Storage) DownloadModule(toDir string, module *Module, progress Progress, cert, key string) (err error) {
 	logger.Debugf("Download module to directory: [%s]", toDir)
 	logger.Tracef("Module: %v", module)
 	if err = os.MkdirAll(toDir, 0755); err != nil {
@@ -240,7 +240,7 @@ func (st *Storage) DownloadModule(toDir string, module *Module, progress Progres
 	}
 
 	for _, sa := range module.Artifacts {
-		if err = downloadArtifact(filepath.Join(toDir, sa.FileName), sa, callback, st.done); err != nil {
+		if err = downloadArtifact(filepath.Join(toDir, sa.FileName), sa, callback, cert, key, st.done); err != nil {
 			return err
 		}
 	}

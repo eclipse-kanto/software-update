@@ -16,11 +16,15 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,7 +35,7 @@ import (
 const prefix = "_temporary-"
 
 // downloadArtifact tries to resume previous download operation or perform a new download.
-func downloadArtifact(to string, artifact *Artifact, progress progressBytes, done chan struct{}) error {
+func downloadArtifact(to string, artifact *Artifact, progress progressBytes, cert, key string, done chan struct{}) error {
 	logger.Infof("Download [%s] to file [%s]", artifact.Link, to)
 
 	// Check for available file.
@@ -70,12 +74,12 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, don
 
 	if stat, err := os.Stat(tmp); !os.IsNotExist(err) {
 		// Try to resume previous download.
-		if dError = resume(tmp, stat.Size(), artifact, progress, done); dError != nil {
+		if dError = resume(tmp, stat.Size(), artifact, progress, cert, key, done); dError != nil {
 			return dError
 		}
 	} else {
 		// No available previous download, perform a full download.
-		response, err := http.Get(artifact.Link)
+		response, err := getDownloadResponse(artifact.Link, 0, cert, key)
 		if err != nil {
 			return err
 		}
@@ -95,17 +99,9 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, don
 	return os.Rename(tmp, to)
 }
 
-func resume(to string, offset int64, artifact *Artifact, progress progressBytes, done chan struct{}) error {
-	// Create new HTTP request with Range header.
-	request, err := http.NewRequest("GET", artifact.Link, nil)
-	if err != nil {
-		return err
-	}
-	request.Header.Set("Range", fmt.Sprintf("bytes=%v-", offset))
-
+func resume(to string, offset int64, artifact *Artifact, progress progressBytes, cert, key string, done chan struct{}) error {
 	// Send the HTTP request and get its response.
-	client := &http.Client{}
-	response, err := client.Do(request)
+	response, err := getDownloadResponse(artifact.Link, offset, cert, key)
 	if err != nil {
 		return err
 	}
@@ -141,6 +137,58 @@ func resume(to string, offset int64, artifact *Artifact, progress progressBytes,
 		return err
 	}
 	return validate(to, artifact.HashType, artifact.HashValue)
+}
+
+func getDownloadResponse(link string, offset int64, certFile, keyFile string) (*http.Response, error) {
+	// Create new HTTP request with Range header.
+	request, err := http.NewRequest(http.MethodGet, link, nil)
+	if err != nil {
+		logger.Errorf("Error doing http(s) request to %s", link)
+		return nil, err
+	}
+	if offset > 0 {
+		request.Header.Set("Range", fmt.Sprintf("bytes=%v-", offset))
+	}
+
+	var transport http.Transport
+	var cert tls.Certificate
+	var caCertPool *x509.CertPool
+	var certificates []tls.Certificate
+	if len(certFile) > 0 {
+		cert, err = tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			logger.Errorf("Error loading certificate key pair file(s) - \"%s\", \"%s\"",
+				certFile, keyFile)
+			return nil, err
+		}
+		certificates = []tls.Certificate{cert}
+		caCert, err := ioutil.ReadFile(certFile)
+		if err != nil {
+			logger.Errorf("Error reading CA certificate file - \"%s\"", certFile)
+			return nil, err
+		}
+		caCertPool = x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+	}
+
+	u, _ := url.Parse(link) // MUST not return error, since http(s) request was done to that url
+	if u.Scheme == "https" {
+		config := &tls.Config{ // using the system CA pool
+			InsecureSkipVerify: false,
+			RootCAs:            caCertPool,
+			Certificates:       certificates,
+			MinVersion:         tls.VersionTLS12,
+			MaxVersion:         tls.VersionTLS13,
+			CipherSuites:       supportedCipherSuites(),
+		}
+		transport = http.Transport{
+			TLSClientConfig: config,
+		}
+	}
+
+	// Send the HTTP request and get its response.
+	client := &http.Client{Transport: &transport}
+	return client.Do(request)
 }
 
 func download(to string, in io.ReadCloser, artifact *Artifact, progress progressBytes, done chan struct{}) error {
@@ -237,4 +285,13 @@ func checksum(fName string, hashType string) ([]byte, error) {
 		return nil, err
 	}
 	return hType.Sum(nil), nil
+}
+
+func supportedCipherSuites() []uint16 {
+	cs := tls.CipherSuites()
+	cid := make([]uint16, len(cs))
+	for i := range cs {
+		cid[i] = cs[i].ID
+	}
+	return cid
 }
