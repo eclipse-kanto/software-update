@@ -24,8 +24,8 @@ const (
 	testDirFeature        = "_tmp-feature"
 	testDefaultHost       = ":12345"
 	testDefaultHostSecure = ":12346"
-	testCert              = "storage/testdata/cert.pem"
-	testKey               = "storage/testdata/key.pem"
+	testCert              = "storage/testdata/valid_cert.pem"
+	testKey               = "storage/testdata/valid_key.pem"
 )
 
 // TestScriptBasedConstructor tests NewScriptBasedSU with wrong broker URL.
@@ -84,7 +84,7 @@ func TestScriptBasedInitLoadDependencies(t *testing.T) {
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable with error for loading install dependencies
 	_, _, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
-		clientConnected: true, storageLocation: dir, featureID: defaultFeatureID})
+		clientConnected: true, storageLocation: dir, featureID: getDefaultFlagValue(flagFeatureID)})
 	if err == nil {
 		t.Fatalf("expected to fail when mandatory field is missing in insalled dept file")
 	}
@@ -99,7 +99,7 @@ func TestScriptBasedInit(t *testing.T) {
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable with error for not connected client
 	_, _, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
-		clientConnected: false, storageLocation: dir, featureID: defaultFeatureID})
+		clientConnected: false, storageLocation: dir, featureID: getDefaultFlagValue(flagFeatureID)})
 	if err == nil {
 		t.Fatal("Ditto Client shall not be connected!")
 	}
@@ -122,7 +122,7 @@ func TestScriptBasedCore(t *testing.T) {
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable.
 	feature, mc, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
-		clientConnected: true, featureID: defaultFeatureID, storageLocation: dir})
+		clientConnected: true, featureID: getDefaultFlagValue(flagFeatureID), storageLocation: dir})
 	if err != nil {
 		t.Fatalf("failed to initialize ScriptBasedSoftwareUpdatable: %v", err)
 	}

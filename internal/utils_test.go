@@ -88,9 +88,9 @@ func mockScriptBasedSoftwareUpdatable(t *testing.T, tc *testConfig) (*ScriptBase
 
 	// Initialize mocked ScriptBasedSoftwareUpdatable
 	if err := feature.init(&ScriptBasedSoftwareUpdatableConfig{
-		Broker:     defaultBroker,
+		Broker:     getDefaultFlagValue(flagFeatureID),
 		FeatureID:  tc.featureID,
-		ModuleType: defaultModuleType,
+		ModuleType: getDefaultFlagValue(flagModuleType),
 	}, &edgeConfiguration{
 		DeviceID: model.NewNamespacedID(testTopicNamespace, testTopicEntryID).String(),
 		TenantID: testTenantID,

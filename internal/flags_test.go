@@ -15,6 +15,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -272,22 +273,23 @@ func TestInitFlagsWithConfigMixedContent(t *testing.T) {
 	writeToConfigFile(t, content)
 	setFlags([]string{c(flagConfigFile, testConfigFilePath)})
 
+	getDefaultFlagValue(flagFeatureID)
 	expectedConfig := &ScriptBasedSoftwareUpdatableConfig{
 		Broker:          "tcp://host:12345",
-		FeatureID:       defaultFeatureID,
-		ArtifactType:    defaultArtifactType,
-		ModuleType:      defaultModuleType,
-		StorageLocation: defaultStorageLocation,
+		FeatureID:       getDefaultFlagValue(flagFeatureID),
+		ArtifactType:    getDefaultFlagValue(flagArtifactType),
+		ModuleType:      getDefaultFlagValue(flagModuleType),
+		StorageLocation: "",
 		Username:        "test",
-		Password:        defaultPassword,
+		Password:        "",
 	}
 
 	expectedLogConfig := &logger.LogConfig{
 		LogFile:       "test_log.txt",
 		LogLevel:      "TRACE",
-		LogFileSize:   defaultLogFileSize,
-		LogFileCount:  defaultLogFileCount,
-		LogFileMaxAge: defaultLogFileMaxAge,
+		LogFileSize:   getDefaultFlagValueInt(flagLogFileSize),
+		LogFileCount:  getDefaultFlagValueInt(flagLogFileCount),
+		LogFileMaxAge: getDefaultFlagValueInt(flagLogFileMaxAge),
 	}
 
 	compareConfigResult(t, expectedConfig, expectedLogConfig)
@@ -377,4 +379,26 @@ func resetArgs() {
 		// reset the flags before each test to avoid flag redefined panic
 		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	}()
+}
+
+func getDefaultFlagValue(flagName string) string {
+	flagName = replaceSuffix(flagName, "ID", "Id")
+	valueOf := reflect.ValueOf(cfg{})
+	typeOf := valueOf.Type()
+	fieldType, ok := typeOf.FieldByName(toFieldName(flagName))
+	if ok {
+		return fieldType.Tag.Get("def")
+	}
+	return ""
+}
+
+func getDefaultFlagValueInt(flagName string) int {
+	valueOf := reflect.ValueOf(cfg{})
+	typeOf := valueOf.Type()
+	fieldType, ok := typeOf.FieldByName(toFieldName(flagName))
+	var result int
+	if ok {
+		result, _ = strconv.Atoi(fieldType.Tag.Get("def"))
+	}
+	return result
 }

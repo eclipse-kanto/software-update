@@ -34,8 +34,12 @@ var (
 )
 
 const (
-	testCertFile = "testdata/cert.pem"
-	testCertKey  = "testdata/key.pem"
+	validCert   = "testdata/valid_cert.pem"
+	validKey    = "testdata/valid_key.pem"
+	expiredCert = "testdata/expired_cert.pem"
+	expiredKey  = "testdata/expired_key.pem"
+	extCert     = "testdata/ext_cert.pem"
+	extKey      = "testdata/ext_key.pem"
 )
 
 type web struct {
@@ -68,6 +72,9 @@ func TestDownloadToFile(t *testing.T) {
 
 // TestDownloadToFileSecureSystemPool tests downloadToFile function, using secure protocol(s) and certificates from system pool.
 func TestDownloadToFileSecureSystemPool(t *testing.T) {
+	// SystemCertPool does not run on Windows:
+	//https://github.com/golang/go/issues/16736
+	//Fixed in 1.18
 	if runtime.GOOS != "linux" {
 		t.Skip("this test only runs on Linux.")
 	}
@@ -75,21 +82,21 @@ func TestDownloadToFileSecureSystemPool(t *testing.T) {
 	certFiles := strings.Split(sslCertFile, string(os.PathListSeparator))
 	containsTestCert := false
 	for _, file := range certFiles {
-		if strings.HasSuffix(strings.TrimSpace(file), filepath.Base(testCertFile)) {
+		if strings.HasSuffix(strings.TrimSpace(file), filepath.Base(validCert)) {
 			containsTestCert = true
 			break
 		}
 	}
 	if !containsTestCert {
 		t.Skipf("Please set SSL_CERT_FILE variable to point to the location"+
-			" of %s certificate file. Current value is \"%s\".", testCertFile, sslCertFile)
+			" of %s certificate file. Current value is \"%s\".", validCert, sslCertFile)
 	}
 	testDownloadToFileSecure("", "", t)
 }
 
 // TestDownloadToFileSecureCustomCertificate tests downloadToFile function, using secure protocol(s) and a custom certificate.
 func TestDownloadToFileSecureCustomCertificate(t *testing.T) {
-	testDownloadToFileSecure(testCertFile, testCertKey, t)
+	testDownloadToFileSecure(validCert, validKey, t)
 }
 
 func testDownloadToFileSecure(certFile, certKey string, t *testing.T) {
@@ -125,7 +132,7 @@ func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T
 			defer os.RemoveAll(dir)
 
 			// Start Web server
-			srv := host(":43234", art.FileName, int64(art.Size), false, isSecure(art.Link, t), t)
+			srv := host(":43234", art.FileName, int64(art.Size), false, isSecure(art.Link, t), validCert, validKey, t)
 			defer srv.close()
 			name := filepath.Join(dir, art.FileName)
 
@@ -172,12 +179,13 @@ func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T
 				t.Fatal("validate resume with file bigger than expected")
 			}
 
-			// 5. Try to resume from missing link.
+			// 6. Try to resume from missing link.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "1111111111111")
 			art.Link = "http://localhost:43234/test-missing.txt"
 			if err := downloadArtifact(name, art, nil, "", "", make(chan struct{})); err == nil {
 				t.Fatal("failed to validate with missing link")
 			}
+
 		})
 	}
 }
@@ -200,7 +208,7 @@ func TestDownloadToFileError(t *testing.T) {
 	}
 
 	// Start Web server
-	srv := host(":43234", art.FileName, int64(art.Size), true, isSecure(art.Link, t), t)
+	srv := host(":43234", art.FileName, int64(art.Size), true, isSecure(art.Link, t), extCert, extKey, t)
 	defer srv.close()
 	name := filepath.Join(dir, art.FileName)
 
@@ -236,12 +244,60 @@ func TestDownloadToFileError(t *testing.T) {
 		t.Fatal("validate with wrong checksum format")
 	}
 
-	// 5. Try to download file bigger than expected.
+	// 6. Try to download file bigger than expected.
 	art.HashType = "MD5"
 	art.HashValue = "ab2ce340d36bbaafe17965a3a2c6ed5b"
 	art.Size -= 10
 	if err := downloadArtifact(name, art, nil, "", "", make(chan struct{})); err == nil {
 		t.Fatal("validate with file bigger than expected")
+	}
+
+}
+
+// TestDownloadToFileSecureError tests HTTPS file download function for bad/expired TLS certificates.
+func TestDownloadToFileSecureError(t *testing.T) {
+	// Prepare
+	dir := "_tmp-download"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("failed create temporary directory: %v", err)
+	}
+
+	// Remove temporary directory at the end
+	defer os.RemoveAll(dir)
+
+	art := &Artifact{
+		FileName: "test.txt", Size: 65536, Link: "https://localhost:43234/test.txt",
+		HashType:  "MD5",
+		HashValue: "ab2ce340d36bbaafe17965a3a2c6ed5b",
+	}
+
+	// Start Web servers secure
+	srvSecureInv := host(":43234", art.FileName, int64(art.Size), true, true, expiredCert, expiredKey, t)
+	defer srvSecureInv.close()
+	srvSecureExt := host(":43235", art.FileName, int64(art.Size), true, true, extCert, extKey, t)
+	defer srvSecureExt.close()
+	srvSecureVal := host(":43236", art.FileName, int64(art.Size), true, true, validCert, validKey, t)
+	defer srvSecureVal.close()
+	name := filepath.Join(dir, art.FileName)
+
+	// 1. Try download with expired certificate
+	if err := downloadArtifact(name, art, nil, "", "", make(chan struct{})); err == nil {
+		t.Fatalf("validated with expired certificate: %v", err)
+	}
+	if err := downloadArtifact(name, art, nil, expiredCert, expiredKey, make(chan struct{})); err == nil {
+		t.Fatalf("validated with expired certificate: %v", err)
+	}
+
+	// 2. Try download with unauthorized certificate
+	art.Link = "https://localhost:43235/test.txt"
+	if err := downloadArtifact(name, art, nil, "", "", make(chan struct{})); err == nil {
+		t.Fatalf("validated with unauthorized certificate: %v", err)
+	}
+
+	// 3. Try download with unknown certificate
+	art.Link = "https://localhost:43236/test.txt"
+	if err := downloadArtifact(name, art, nil, extCert, extKey, make(chan struct{})); err == nil {
+		t.Fatalf("validated with certificate, different than configured one: %v", err)
 	}
 }
 
@@ -253,7 +309,7 @@ func check(name string, expected int, t *testing.T) {
 }
 
 // host create and start a HTTP server.
-func host(addr string, name string, size int64, simple bool, secure bool, t *testing.T) *web {
+func host(addr string, name string, size int64, simple bool, secure bool, cert string, key string, t *testing.T) *web {
 	// Create new HTTP server.
 	w := &web{name: name, size: size, srv: &http.Server{Addr: addr}, t: t}
 
@@ -264,17 +320,17 @@ func host(addr string, name string, size int64, simple bool, secure bool, t *tes
 		testOnceRange.Do(func() { http.HandleFunc(fmt.Sprintf("/%s", name), w.handlerRange) })
 	}
 
-	// Start HTTP server in separate go routine.
+	// Start HTTP server in separate goroute.
 	if secure {
 		go func() {
-			if err := w.srv.ListenAndServeTLS(testCertFile, testCertKey); err != nil && err != http.ErrServerClosed {
-				t.Errorf("failed to start web server: %v", err)
+			if err := w.srv.ListenAndServeTLS(cert, key); err != nil && err != http.ErrServerClosed {
+				t.Errorf("The secure server is not started: %v", err)
 			}
 		}()
 	} else {
 		go func() {
 			if err := w.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				t.Errorf("failed to start web server: %v", err)
+				t.Errorf("Failed to start web server: %v", err)
 			}
 		}()
 	}
