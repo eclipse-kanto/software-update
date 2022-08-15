@@ -130,8 +130,7 @@ func TestScriptBasedCore(t *testing.T) {
 
 	testDownloadInstall(feature, mc, w.getSoftwareArtifacts(false, "install"), t)
 
-	feature.cert = testCert
-	feature.key = testKey
+	feature.serverCert = testCert
 	testDownloadInstall(feature, mc, wSecure.getSoftwareArtifacts(true, "install"), t)
 }
 

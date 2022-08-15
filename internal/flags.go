@@ -37,13 +37,12 @@ const (
 	flagModuleType      = "moduleType"
 	flagArtifactType    = "artifactType"
 	flagInstall         = "install"
+	flagCert            = "serverCert"
 	flagLogFile         = "logFile"
 	flagLogLevel        = "logLevel"
 	flagLogFileSize     = "logFileSize"
 	flagLogFileCount    = "logFileCount"
 	flagLogFileMaxAge   = "logFileMaxAge"
-	flagCert            = "cert"
-	flagKey             = "key"
 )
 
 var (
@@ -60,8 +59,7 @@ type cfg struct {
 	ModuleType      string   `json:"moduleType" def:"software" descr:"Module type of SoftwareUpdatable"`
 	ArtifactType    string   `json:"artifactType" def:"archive" descr:"Defines the module artifact type: archive or plane"`
 	Install         []string `json:"install" descr:"Defines the absolute path to install script"`
-	Cert            string   `json:"cert" descr:"A PEM encoded certificate \"file\" for secure artifact download"`
-	Key             string   `json:"key" descr:"A PEM encoded unencrypted private key for secure artifact download"`
+	ServerCert      string   `json:"serverCert" descr:"A PEM encoded certificate \"file\" for secure artifact download"`
 	LogFile         string   `json:"logFile" def:"logs/log.txt" descr:"Log file location in storage directory"`
 	LogLevel        string   `json:"logLevel" def:"INFO" descr:"Log levels are ERROR, WARNING, INFO, DEBUG, TRACE"`
 	LogFileSize     int      `json:"logFileSize" def:"2" descr:"Log file size in MB before it gets rotated"`
@@ -111,7 +109,7 @@ func initFlagsWithDefaultValues(config interface{}) {
 		case int:
 			value, err := strconv.Atoi(defaultValue)
 			if err != nil {
-				log.Println(fmt.Sprintf("Error parsing integer argument %v with value %v", fieldType.Name, defaultValue))
+				log.Printf("error parsing integer argument %v with value %v", fieldType.Name, defaultValue)
 			}
 			flag.IntVar(pointer.(*int), flagName, value, description)
 		}
@@ -133,7 +131,7 @@ func loadDefaultValues() *cfg {
 			case int:
 				value, err := strconv.Atoi(defaultValue)
 				if err != nil {
-					log.Println(fmt.Sprintf("Error parsing integer argument %v with value %v", fieldType.Name, defaultValue))
+					log.Printf("error parsing integer argument %v with value %v", fieldType.Name, defaultValue)
 				}
 				fieldValue.Set(reflect.ValueOf(value))
 			}

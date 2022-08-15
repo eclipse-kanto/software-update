@@ -111,8 +111,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 	expectedArtifact := "TestArchive"
 	expectedFeatureID := "TestFeature"
 	expectedInstall := "TestInstall"
-	expectedCert := "TestCert"
-	expectedKey := "TestKey"
+	expectedServerCert := "TestCert"
 	expectedLogFile := ""
 	expectedLogFileCount := 4
 	expectedLogFileMaxAge := 13
@@ -129,8 +128,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 		c(flagArtifactType, expectedArtifact),
 		c(flagFeatureID, expectedFeatureID),
 		c(flagInstall, expectedInstall),
-		c(flagCert, expectedCert),
-		c(flagKey, expectedKey),
+		c(flagCert, expectedServerCert),
 		c(flagLogFile, expectedLogFile),
 		c(flagLogFileCount, strconv.Itoa(expectedLogFileCount)),
 		c(flagLogFileMaxAge, strconv.Itoa(expectedLogFileMaxAge)),
@@ -152,8 +150,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 		Broker:          expectedFlagBroker,
 		Username:        expectedUsername,
 		Password:        expectedPassword,
-		Cert:            expectedCert,
-		Key:             expectedKey,
+		ServerCert:      expectedServerCert,
 		StorageLocation: expectedStorageLocation,
 		FeatureID:       expectedFeatureID,
 		ModuleType:      expectedModuleType,

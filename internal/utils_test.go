@@ -88,7 +88,7 @@ func mockScriptBasedSoftwareUpdatable(t *testing.T, tc *testConfig) (*ScriptBase
 
 	// Initialize mocked ScriptBasedSoftwareUpdatable
 	if err := feature.init(&ScriptBasedSoftwareUpdatableConfig{
-		Broker:     getDefaultFlagValue(flagFeatureID),
+		Broker:     getDefaultFlagValue(flagBroker),
 		FeatureID:  tc.featureID,
 		ModuleType: getDefaultFlagValue(flagModuleType),
 	}, &edgeConfiguration{
