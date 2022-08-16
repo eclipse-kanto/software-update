@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/eclipse-kanto/software-update/hawkbit"
+	"github.com/eclipse-kanto/software-update/internal/storage"
 )
 
 const (
@@ -106,7 +107,7 @@ func TestScriptBasedInit(t *testing.T) {
 
 }
 
-// TestSBSUInit tests ScriptBasedSoftwareUpdatable core functionality: init, install and download.
+// TestScriptBasedCore tests ScriptBasedSoftwareUpdatable core functionality: init, install and download.
 func TestScriptBasedCore(t *testing.T) {
 	// Prepare
 	dir := assertPath(t, testDirFeature, false)
@@ -114,11 +115,11 @@ func TestScriptBasedCore(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// Prepare/Close simple HTTP server used to host testing artifacts
-	w := host(testDefaultHost, "", "", t).addInstallScript()
-	defer w.close()
+	w := storage.Host(testDefaultHost, "", 0, true, false, "", "", t).AddInstallScript()
+	defer w.Close()
 
-	wSecure := host(testDefaultHostSecure, testCert, testKey, t).addInstallScript()
-	defer wSecure.close()
+	wSecure := storage.Host(testDefaultHostSecure, "", 0, true, true, testCert, testKey, t).AddInstallScript()
+	defer wSecure.Close()
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable.
 	feature, mc, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
@@ -128,10 +129,10 @@ func TestScriptBasedCore(t *testing.T) {
 	}
 	defer feature.Disconnect()
 
-	testDownloadInstall(feature, mc, w.getSoftwareArtifacts(false, "install"), t)
+	testDownloadInstall(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), t)
 
 	feature.serverCert = testCert
-	testDownloadInstall(feature, mc, wSecure.getSoftwareArtifacts(true, "install"), t)
+	testDownloadInstall(feature, mc, wSecure.GenerateSoftwareArtifacts(true, "install"), t)
 }
 
 func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifacts []*hawkbit.SoftwareArtifactAction, t *testing.T) {

@@ -379,7 +379,7 @@ func resetArgs() {
 }
 
 func getDefaultFlagValue(flagName string) string {
-	flagName = replaceSuffix(flagName, "ID", "Id")
+	flagName = toFieldName(flagName)
 	valueOf := reflect.ValueOf(cfg{})
 	typeOf := valueOf.Type()
 	fieldType, ok := typeOf.FieldByName(toFieldName(flagName))
