@@ -169,7 +169,6 @@ func requestDownload(link string, offset int64, serverCert string) (*http.Respon
 			RootCAs:            caCertPool,
 			MinVersion:         tls.VersionTLS12,
 			MaxVersion:         tls.VersionTLS13,
-			CipherSuites:       supportedCipherSuites(),
 		}
 		transport = http.Transport{
 			TLSClientConfig: config,
@@ -275,13 +274,4 @@ func checksum(fName string, hashType string) ([]byte, error) {
 		return nil, err
 	}
 	return hType.Sum(nil), nil
-}
-
-func supportedCipherSuites() []uint16 {
-	cs := tls.CipherSuites()
-	cid := make([]uint16, len(cs))
-	for i := range cs {
-		cid[i] = cs[i].ID
-	}
-	return cid
 }
