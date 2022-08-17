@@ -164,7 +164,7 @@ func requestDownload(link string, offset int64, serverCert string) (*http.Respon
 
 	u, _ := url.Parse(link) // MUST not return error, since http(s) request was done to that url
 	if u.Scheme == "https" {
-		config := &tls.Config{ // using the system CA pool
+		config := &tls.Config{
 			InsecureSkipVerify: false,
 			RootCAs:            caCertPool,
 			MinVersion:         tls.VersionTLS12,

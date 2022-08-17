@@ -73,8 +73,8 @@ type cfg struct {
 	ArtifactType    string   `json:"artifactType" def:"archive" descr:"Defines the module artifact type: archive or plane"`
 	Install         []string `json:"install" descr:"Defines the absolute path to install script"`
 	ServerCert      string   `json:"serverCert" descr:"A PEM encoded certificate \"file\" for secure artifact download"`
-	LogFile         string   `json:"logFile" def:"logs/log.txt" descr:"Log file location in storage directory"`
-	LogLevel        string   `json:"logLevel" def:"INFO" descr:"Log levels are ERROR, WARNING, INFO, DEBUG, TRACE"`
+	LogFile         string   `json:"logFile" def:"logs/software-update.log" descr:"Log file location in storage directory"`
+	LogLevel        string   `json:"logLevel" def:"INFO" descr:"Log levels are ERROR, WARN, INFO, DEBUG, TRACE"`
 	LogFileSize     int      `json:"logFileSize" def:"2" descr:"Log file size in MB before it gets rotated"`
 	LogFileCount    int      `json:"logFileCount" def:"5" descr:"Log file max rotations count"`
 	LogFileMaxAge   int      `json:"logFileMaxAge" def:"28" descr:"Log file rotations max age in days"`
