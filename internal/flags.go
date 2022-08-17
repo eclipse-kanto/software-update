@@ -43,6 +43,19 @@ const (
 	flagLogFileSize     = "logFileSize"
 	flagLogFileCount    = "logFileCount"
 	flagLogFileMaxAge   = "logFileMaxAge"
+
+	defaultBroker          = "tcp://localhost:1883"
+	defaultUsername        = ""
+	defaultPassword        = ""
+	defaultStorageLocation = ""
+	defaultFeatureID       = "SoftwareUpdatable"
+	defaultModuleType      = "software"
+	defaultArtifactType    = "archive"
+	defaultLogFile         = "log/software-update.log"
+	defaultLogLevel        = "INFO"
+	defaultLogFileSize     = 2
+	defaultLogFileCount    = 5
+	defaultLogFileMaxAge   = 28
 )
 
 var (

@@ -12,8 +12,15 @@
 package feature
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"os"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -81,9 +88,9 @@ func mockScriptBasedSoftwareUpdatable(t *testing.T, tc *testConfig) (*ScriptBase
 
 	// Initialize mocked ScriptBasedSoftwareUpdatable
 	if err := feature.init(&ScriptBasedSoftwareUpdatableConfig{
-		Broker:     getDefaultFlagValue(flagBroker),
+		Broker:     defaultBroker,
 		FeatureID:  tc.featureID,
-		ModuleType: getDefaultFlagValue(flagModuleType),
+		ModuleType: defaultModuleType,
 	}, &edgeConfiguration{
 		DeviceID: model.NewNamespacedID(testTopicNamespace, testTopicEntryID).String(),
 		TenantID: testTenantID,
@@ -241,4 +248,101 @@ func (token *mockedToken) Done() <-chan struct{} {
 // Error returns the error if set.
 func (token *mockedToken) Error() error {
 	return token.err
+}
+
+var (
+	// testAliases is used to add HTTP alias only once.
+	testAliases map[string]string = make(map[string]string)
+)
+
+// handlerSimple handles incoming HTTP requests without range header support.
+func handlerSimple(writer http.ResponseWriter, request *http.Request) {
+	alias := request.URL.Path[strings.LastIndex(request.URL.Path, "/")+1:]
+	body := testAliases[alias]
+
+	writer.Header().Set("Content-Type", "text/plain")
+	writer.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, alias))
+	writer.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	writer.Write([]byte(body))
+}
+
+// testWeb represents simple HTTP server used for testing.
+type testWeb struct {
+	addr string
+	srv  *http.Server
+	t    *testing.T
+}
+
+// host create and start a HTTP server.
+func host(addr string, t *testing.T) *testWeb {
+	// Create new HTTP server.
+	w := &testWeb{addr: addr, srv: &http.Server{Addr: addr}, t: t}
+	// Start HTTP server in separate goroute.
+	go func() {
+		if err := w.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			t.Errorf("failed to start web server: %v", err)
+		}
+	}()
+	return w
+}
+
+// addAlias adds HTTP alias (only once).
+func (w *testWeb) addAlias(alias string, body string) *testWeb {
+	if _, ok := testAliases[alias]; !ok {
+		http.HandleFunc(fmt.Sprintf("/%s", alias), handlerSimple)
+	}
+	testAliases[alias] = body
+	return w
+}
+
+// addInstallScript adds Install Script HTTP alias (only once).
+func (w *testWeb) addInstallScript() *testWeb {
+	if runtime.GOOS == "windows" {
+		w.addAlias("install.bat", "@echo off\n(\necho message=My final message!) > status\nping 127.0.0.1\n")
+	} else {
+		w.addAlias("install.sh", "#!/bin/sh\necho 'message=My final message!\n' > status\nsleep 5\n")
+	}
+	return w
+}
+
+// close the http server.
+func (w *testWeb) close() {
+	if err := w.srv.Shutdown(context.Background()); err != nil {
+		w.t.Errorf("failed shutdown web server: %v", err)
+	}
+}
+
+// getSoftwareArtifacts generates array of SoftwareArtifactAction based on the registered HTTP aliases with the given names.
+func (w *testWeb) getSoftwareArtifacts(names ...string) []*hawkbit.SoftwareArtifactAction {
+	res := make([]*hawkbit.SoftwareArtifactAction, len(names))
+	for i, name := range names {
+		// If alias name is "install", add its file extension: Windows = .bat | Linux/Mac/etc = .sh
+		alias := name
+		if alias == "install" {
+			if runtime.GOOS == "windows" {
+				alias += ".bat"
+			} else {
+				alias += ".sh"
+			}
+		}
+		body := testAliases[alias]
+
+		// Calculate alias SHA256 hash
+		hType := sha256.New()
+		hType.Write([]byte(body))
+		hash := hex.EncodeToString(hType.Sum(nil))
+
+		// Create SoftwareArtifactAction for coresponding alias
+		res[i] = &hawkbit.SoftwareArtifactAction{
+			Filename: alias,
+			Download: map[hawkbit.Protocol]*hawkbit.Links{
+				hawkbit.HTTP: {URL: fmt.Sprintf("http://localhost%s/%s", w.addr, alias)},
+			},
+			Checksums: map[hawkbit.Hash]string{
+				hawkbit.SHA256: hash,
+			},
+			Size: len(body),
+		}
+	}
+	return res
 }
