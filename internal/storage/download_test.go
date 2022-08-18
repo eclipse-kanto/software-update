@@ -20,12 +20,12 @@ import (
 )
 
 const (
-	validCert   = "testdata/valid_cert.pem"
-	validKey    = "testdata/valid_key.pem"
-	expiredCert = "testdata/expired_cert.pem"
-	expiredKey  = "testdata/expired_key.pem"
-	extCert     = "testdata/ext_cert.pem"
-	extKey      = "testdata/ext_key.pem"
+	validCert     = "testdata/valid_cert.pem"
+	validKey      = "testdata/valid_key.pem"
+	expiredCert   = "testdata/expired_cert.pem"
+	expiredKey    = "testdata/expired_key.pem"
+	untrustedCert = "testdata/untrusted_cert.pem"
+	untrustedKey  = "testdata/untrusted_key.pem"
 )
 
 // TestDownloadToFile tests downloadToFile function, using non-secure protocol(s).
@@ -186,7 +186,7 @@ func TestDownloadToFileError(t *testing.T) {
 	}
 
 	// Start Web server
-	srv := Host(":43234", art.FileName, int64(art.Size), true, isSecure(art.Link, t), extCert, extKey, t)
+	srv := Host(":43234", art.FileName, int64(art.Size), true, isSecure(art.Link, t), untrustedCert, untrustedKey, t)
 	defer srv.Close()
 	name := filepath.Join(dir, art.FileName)
 
@@ -250,33 +250,33 @@ func TestDownloadToFileSecureError(t *testing.T) {
 	}
 
 	// Start Web servers secure
-	srvSecureInv := Host(":43234", art.FileName, int64(art.Size), true, true, expiredCert, expiredKey, t)
-	defer srvSecureInv.Close()
-	srvSecureExt := Host(":43235", art.FileName, int64(art.Size), true, true, extCert, extKey, t)
-	defer srvSecureExt.Close()
-	srvSecureVal := Host(":43236", art.FileName, int64(art.Size), true, true, validCert, validKey, t)
-	defer srvSecureVal.Close()
+	srvSecureInvalid := Host(":43234", art.FileName, int64(art.Size), true, true, expiredCert, expiredKey, t)
+	defer srvSecureInvalid.Close()
+	srvSecureUntrusted := Host(":43235", art.FileName, int64(art.Size), true, true, untrustedCert, untrustedKey, t)
+	defer srvSecureUntrusted.Close()
+	srvSecureValid := Host(":43236", art.FileName, int64(art.Size), true, true, validCert, validKey, t)
+	defer srvSecureValid.Close()
 	name := filepath.Join(dir, art.FileName)
 
-	// 1. Try download with expired certificate
+	// 1. Server uses expired certificate
 	art.Link = "https://localhost:43234/test.txt"
 	if err := downloadArtifact(name, art, nil, "", make(chan struct{})); err == nil {
-		t.Fatalf("validated with expired certificate: %v", err)
+		t.Fatalf("download must fail(client uses no certificate, server uses expired): %v", err)
 	}
 	if err := downloadArtifact(name, art, nil, expiredCert, make(chan struct{})); err == nil {
-		t.Fatalf("validated with expired certificate: %v", err)
+		t.Fatalf("download must fail(client and server use expired certificate): %v", err)
 	}
 
-	// 2. Try download with untrusted certificate
+	// 2. Server uses untrusted certificate
 	art.Link = "https://localhost:43235/test.txt"
 	if err := downloadArtifact(name, art, nil, "", make(chan struct{})); err == nil {
-		t.Fatalf("validated with untrusted certificate: %v", err)
+		t.Fatalf("download must fail(client uses no certificate, server uses untrusted): %v", err)
 	}
 
-	// 3. Try download with unknown certificate
+	// 3. Server uses valid certificate
 	art.Link = "https://localhost:43236/test.txt"
-	if err := downloadArtifact(name, art, nil, extCert, make(chan struct{})); err == nil {
-		t.Fatalf("validated with certificate, different than configured one: %v", err)
+	if err := downloadArtifact(name, art, nil, untrustedCert, make(chan struct{})); err == nil {
+		t.Fatalf("download must fail(client uses untrusted certificate, server uses valid): %v", err)
 	}
 }
 
