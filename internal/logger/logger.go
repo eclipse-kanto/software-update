@@ -52,7 +52,7 @@ const (
 	logFlags int = log.Ldate | log.Ltime | log.Lmicroseconds | log.Lmsgprefix
 
 	ePrefix = "ERROR  "
-	wPrefix = "WARN"
+	wPrefix = "WARN   "
 	iPrefix = "INFO   "
 	dPrefix = "DEBUG  "
 	tPrefix = "TRACE  "

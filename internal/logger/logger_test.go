@@ -135,7 +135,7 @@ func validateError(log string, has bool, t *testing.T) {
 	}
 }
 
-// validateError validates for warn logs.
+// validateWarn validates for warn logs.
 func validateWarn(log string, has bool, t *testing.T) {
 	// 1. Validate for Warn function.
 	Warn("warn log")
