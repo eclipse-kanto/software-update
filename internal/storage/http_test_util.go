@@ -28,8 +28,8 @@ import (
 	"github.com/eclipse-kanto/software-update/hawkbit"
 )
 
-// Web encapsulates a test HTTP(S) server and testing data
-type Web struct {
+// TestHTTPServer encapsulates a test HTTP(S) server and supplementary data
+type TestHTTPServer struct {
 	name string
 	size int64
 	srv  *http.Server
@@ -60,9 +60,9 @@ func handlerSimpleDynamicAlias(writer http.ResponseWriter, request *http.Request
 }
 
 // Host creates and starts a HTTP(s) server.
-func Host(addr string, name string, size int64, simple bool, secure bool, cert string, key string, t *testing.T) *Web {
+func Host(addr string, name string, size int64, simple bool, secure bool, cert string, key string, t *testing.T) *TestHTTPServer {
 	// Create new HTTP server.
-	w := &Web{name: name, size: size, srv: &http.Server{Addr: addr}, t: t}
+	w := &TestHTTPServer{name: name, size: size, srv: &http.Server{Addr: addr}, t: t}
 
 	// Add HTTP alias only once.
 	if simple {
@@ -75,13 +75,13 @@ func Host(addr string, name string, size int64, simple bool, secure bool, cert s
 	if secure {
 		go func() {
 			if err := w.srv.ListenAndServeTLS(cert, key); err != nil && err != http.ErrServerClosed {
-				t.Errorf("Failed to start secure web server: %v", err)
+				t.Errorf("Failed to start secure http server: %v", err)
 			}
 		}()
 	} else {
 		go func() {
 			if err := w.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				t.Errorf("Failed to start web server: %v", err)
+				t.Errorf("Failed to start http server: %v", err)
 			}
 		}()
 	}
@@ -92,7 +92,7 @@ func Host(addr string, name string, size int64, simple bool, secure bool, cert s
 }
 
 // setAlias sets HTTP alias (only once).
-func (w *Web) setAlias(alias string, body string) *Web {
+func (w *TestHTTPServer) setAlias(alias string, body string) *TestHTTPServer {
 	if _, ok := testAliases[alias]; !ok {
 		http.HandleFunc(fmt.Sprintf("/%s", alias), handlerSimpleDynamicAlias)
 	}
@@ -101,7 +101,7 @@ func (w *Web) setAlias(alias string, body string) *Web {
 }
 
 // AddInstallScript adds Install Script HTTP alias (only once).
-func (w *Web) AddInstallScript() *Web {
+func (w *TestHTTPServer) AddInstallScript() *TestHTTPServer {
 	if runtime.GOOS == "windows" {
 		w.setAlias("install.bat", "@echo off\n(\necho message=My final message!) > status\nping 127.0.0.1\n")
 	} else {
@@ -111,14 +111,14 @@ func (w *Web) AddInstallScript() *Web {
 }
 
 // Close closes the http server.
-func (w *Web) Close() {
+func (w *TestHTTPServer) Close() {
 	if err := w.srv.Shutdown(context.Background()); err != nil {
-		w.t.Errorf("failed shutdown web server: %v", err)
+		w.t.Errorf("failed shutdown of http server: %v", err)
 	}
 }
 
 // handlerRange handles incoming HTTP requests with range header support.
-func (w *Web) handlerRange(writer http.ResponseWriter, request *http.Request) {
+func (w *TestHTTPServer) handlerRange(writer http.ResponseWriter, request *http.Request) {
 	// Set default headers for txt file.
 	writer.Header().Set("Content-Type", "text/plain")
 	writer.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, w.name))
@@ -169,7 +169,7 @@ func (w *Web) handlerRange(writer http.ResponseWriter, request *http.Request) {
 }
 
 // handlerSimple handles incoming HTTP requests without range header support.
-func (w *Web) handlerSimple(writer http.ResponseWriter, request *http.Request) {
+func (w *TestHTTPServer) handlerSimple(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Content-Type", "text/plain")
 	writer.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, w.name))
 	writer.Header().Set("Content-Length", strconv.Itoa(int(w.size)))
@@ -196,7 +196,7 @@ func isSecure(link string, t *testing.T) bool {
 }
 
 // GenerateSoftwareArtifacts generates array of SoftwareArtifactAction based on the registered HTTP aliases with the given names.
-func (w *Web) GenerateSoftwareArtifacts(secure bool, names ...string) []*hawkbit.SoftwareArtifactAction {
+func (w *TestHTTPServer) GenerateSoftwareArtifacts(secure bool, names ...string) []*hawkbit.SoftwareArtifactAction {
 	var protocol hawkbit.Protocol
 	if secure {
 		protocol = hawkbit.HTTPS

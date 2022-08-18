@@ -109,7 +109,7 @@ func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T
 			// Remove temporary directory at the end
 			defer os.RemoveAll(dir)
 
-			// Start Web server
+			// Start http(s) server
 			srv := Host(":43234", art.FileName, int64(art.Size), false, isSecure(art.Link, t), validCert, validKey, t)
 			defer srv.Close()
 			name := filepath.Join(dir, art.FileName)
@@ -185,7 +185,7 @@ func TestDownloadToFileError(t *testing.T) {
 		HashValue: "ab2ce340d36bbaafe17965a3a2c6ed5b",
 	}
 
-	// Start Web server
+	// Start http(s) server
 	srv := Host(":43234", art.FileName, int64(art.Size), true, isSecure(art.Link, t), untrustedCert, untrustedKey, t)
 	defer srv.Close()
 	name := filepath.Join(dir, art.FileName)
@@ -249,7 +249,7 @@ func TestDownloadToFileSecureError(t *testing.T) {
 		HashValue: "ab2ce340d36bbaafe17965a3a2c6ed5b",
 	}
 
-	// Start Web servers secure
+	// Start https servers
 	srvSecureInvalid := Host(":43234", art.FileName, int64(art.Size), true, true, expiredCert, expiredKey, t)
 	defer srvSecureInvalid.Close()
 	srvSecureUntrusted := Host(":43235", art.FileName, int64(art.Size), true, true, untrustedCert, untrustedKey, t)
