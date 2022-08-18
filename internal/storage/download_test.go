@@ -76,7 +76,7 @@ func TestDownloadToFile(t *testing.T) {
 
 			// 1. Resume downlaod of corrupted temporary file.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "wrong start")
-			if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+			if err := downloadArtifact(name, art, nil, "", make(chan struct{})); err == nil {
 				t.Fatal("downlaod of corrupted temporary file must fail")
 			}
 
@@ -85,7 +85,7 @@ func TestDownloadToFile(t *testing.T) {
 			callback := func(bytes int64) {
 				close(done)
 			}
-			if err := downloadArtifact(name, art, callback, done); err != ErrCancel {
+			if err := downloadArtifact(name, art, callback, "", done); err != ErrCancel {
 				t.Fatalf("failed to cancel download operation: %v", err)
 			}
 			if _, err := os.Stat(filepath.Join(dir, prefix+art.FileName)); os.IsNotExist(err) {
@@ -94,13 +94,13 @@ func TestDownloadToFile(t *testing.T) {
 
 			// 3. Resume previous download operation.
 			callback = func(bytes int64) { /* Do nothing. */ }
-			if err := downloadArtifact(name, art, callback, make(chan struct{})); err != nil {
+			if err := downloadArtifact(name, art, callback, "", make(chan struct{})); err != nil {
 				t.Fatalf("failed to download artifact: %v", err)
 			}
 			check(name, art.Size, t)
 
 			// 4. Download available file.
-			if err := downloadArtifact(name, art, callback, make(chan struct{})); err != nil {
+			if err := downloadArtifact(name, art, callback, "", make(chan struct{})); err != nil {
 				t.Fatalf("failed to download artifact: %v", err)
 			}
 			check(name, art.Size, t)
@@ -113,14 +113,14 @@ func TestDownloadToFile(t *testing.T) {
 			// 5. Try to resume with file bigger than expected.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "1111111111111")
 			art.Size -= 10
-			if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+			if err := downloadArtifact(name, art, nil, "", make(chan struct{})); err == nil {
 				t.Fatal("validate resume with file bigger than expected")
 			}
 
 			// 5. Try to resume from missing link.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "1111111111111")
 			art.Link = "http://localhost:43234/test-missing.txt"
-			if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+			if err := downloadArtifact(name, art, nil, "", make(chan struct{})); err == nil {
 				t.Fatal("failed to validate with missing link")
 			}
 		})
@@ -151,33 +151,33 @@ func TestDownloadToFileError(t *testing.T) {
 
 	// 1. Resume is not supported.
 	WriteLn(filepath.Join(dir, prefix+art.FileName), "1111")
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err != nil {
+	if err := downloadArtifact(name, art, nil, "", make(chan struct{})); err != nil {
 		t.Fatalf("failed to download file artifact: %v", err)
 	}
 	check(name, art.Size, t)
 
 	// 2. Try with missing checksum.
 	art.HashValue = ""
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", make(chan struct{})); err == nil {
 		t.Fatal("validatted with missing checksum")
 	}
 
 	// 3. Try with missing link.
 	art.Link = "http://localhost:43234/test-missing.txt"
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", make(chan struct{})); err == nil {
 		t.Fatal("failed to validate with missing link")
 	}
 
 	// 4. Try with wrong checksum type.
 	art.Link = "http://localhost:43234/test-simple.txt"
 	art.HashType = ""
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", make(chan struct{})); err == nil {
 		t.Fatal("validate with wrong checksum type")
 	}
 
 	// 5. Try with wrong checksum format.
 	art.HashValue = ";;"
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", make(chan struct{})); err == nil {
 		t.Fatal("validate with wrong checksum format")
 	}
 
@@ -185,7 +185,7 @@ func TestDownloadToFileError(t *testing.T) {
 	art.HashType = "MD5"
 	art.HashValue = "ab2ce340d36bbaafe17965a3a2c6ed5b"
 	art.Size -= 10
-	if err := downloadArtifact(name, art, nil, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", make(chan struct{})); err == nil {
 		t.Fatal("validate with file bigger than expected")
 	}
 }

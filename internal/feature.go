@@ -45,6 +45,7 @@ type ScriptBasedSoftwareUpdatableConfig struct {
 	FeatureID       string
 	ModuleType      string
 	ArtifactType    string
+	ServerCert      string
 	InstallCommand  command
 }
 
@@ -57,6 +58,7 @@ type ScriptBasedSoftwareUpdatable struct {
 	dittoClient    *ditto.Client
 	mqttClient     MQTT.Client
 	artifactType   string
+	serverCert     string
 	installCommand *command
 }
 
@@ -75,6 +77,7 @@ func NewScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Scr
 		store: localStorage,
 		// Build install script command
 		installCommand: &scriptSUPConfig.InstallCommand,
+		serverCert:     scriptSUPConfig.ServerCert,
 		// Define the module artifact(s) type: archive or plane
 		artifactType: scriptSUPConfig.ArtifactType,
 		// Create queue with size 10

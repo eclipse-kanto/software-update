@@ -16,11 +16,15 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,7 +35,7 @@ import (
 const prefix = "_temporary-"
 
 // downloadArtifact tries to resume previous download operation or perform a new download.
-func downloadArtifact(to string, artifact *Artifact, progress progressBytes, done chan struct{}) error {
+func downloadArtifact(to string, artifact *Artifact, progress progressBytes, serverCert string, done chan struct{}) error {
 	logger.Infof("Download [%s] to file [%s]", artifact.Link, to)
 
 	// Check for available file.
@@ -70,12 +74,12 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, don
 
 	if stat, err := os.Stat(tmp); !os.IsNotExist(err) {
 		// Try to resume previous download.
-		if dError = resume(tmp, stat.Size(), artifact, progress, done); dError != nil {
+		if dError = resume(tmp, stat.Size(), artifact, progress, serverCert, done); dError != nil {
 			return dError
 		}
 	} else {
 		// No available previous download, perform a full download.
-		response, err := http.Get(artifact.Link)
+		response, err := requestDownload(artifact.Link, 0, serverCert)
 		if err != nil {
 			return err
 		}
@@ -95,17 +99,9 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, don
 	return os.Rename(tmp, to)
 }
 
-func resume(to string, offset int64, artifact *Artifact, progress progressBytes, done chan struct{}) error {
-	// Create new HTTP request with Range header.
-	request, err := http.NewRequest("GET", artifact.Link, nil)
-	if err != nil {
-		return err
-	}
-	request.Header.Set("Range", fmt.Sprintf("bytes=%v-", offset))
-
+func resume(to string, offset int64, artifact *Artifact, progress progressBytes, serverCert string, done chan struct{}) error {
 	// Send the HTTP request and get its response.
-	client := &http.Client{}
-	response, err := client.Do(request)
+	response, err := requestDownload(artifact.Link, offset, serverCert)
 	if err != nil {
 		return err
 	}
@@ -141,6 +137,47 @@ func resume(to string, offset int64, artifact *Artifact, progress progressBytes,
 		return err
 	}
 	return validate(to, artifact.HashType, artifact.HashValue)
+}
+
+func requestDownload(link string, offset int64, serverCert string) (*http.Response, error) {
+	// Create new HTTP request with Range header.
+	request, err := http.NewRequest(http.MethodGet, link, nil)
+	if err != nil {
+		logger.Errorf("Error doing http(s) request to %s", link)
+		return nil, err
+	}
+	if offset > 0 {
+		request.Header.Set("Range", fmt.Sprintf("bytes=%v-", offset))
+	}
+
+	var transport http.Transport
+	var caCertPool *x509.CertPool
+	if len(serverCert) > 0 {
+		caCert, err := ioutil.ReadFile(serverCert)
+		if err != nil {
+			logger.Errorf("Error reading CA certificate file - \"%s\"", serverCert)
+			return nil, err
+		}
+		caCertPool = x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+	}
+
+	u, _ := url.Parse(link) // MUST not return error, since http(s) request was done to that url
+	if u.Scheme == "https" {
+		config := &tls.Config{
+			InsecureSkipVerify: false,
+			RootCAs:            caCertPool,
+			MinVersion:         tls.VersionTLS12,
+			MaxVersion:         tls.VersionTLS13,
+		}
+		transport = http.Transport{
+			TLSClientConfig: config,
+		}
+	}
+
+	// Send the HTTP request and get its response.
+	client := &http.Client{Transport: &transport}
+	return client.Do(request)
 }
 
 func download(to string, in io.ReadCloser, artifact *Artifact, progress progressBytes, done chan struct{}) error {

@@ -234,7 +234,7 @@ func TestDownloadArchiveModule(t *testing.T) {
 	// 1. Download module without progress.
 	path := filepath.Join(store.DownloadPath, "0", "0")
 	m := &Module{Name: "name1", Version: "1", Artifacts: []*Artifact{art}}
-	if err := store.DownloadModule(path, m, nil); err != nil {
+	if err := store.DownloadModule(path, m, nil, ""); err != nil {
 		t.Fatalf("fail to download module [Hash: %s, File: %s]: %v", art.HashValue, hex.EncodeToString(srv.data), err)
 	}
 	existence(filepath.Join(path, art.FileName), true, "[initial download]", t)
@@ -251,7 +251,7 @@ func TestDownloadArchiveModule(t *testing.T) {
 	// 3. Download previous module with progress.
 	path = filepath.Join(store.DownloadPath, "0", "1")
 	progress := func(percent int) { /* Do nothing. */ }
-	if err := store.DownloadModule(path, m, progress); err != nil {
+	if err := store.DownloadModule(path, m, progress, ""); err != nil {
 		t.Errorf("fail to download module: %v", err)
 	}
 	existence(filepath.Join(store.ModulesPath, "0", art.FileName), false, "[archive]", t)

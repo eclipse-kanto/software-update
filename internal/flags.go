@@ -16,7 +16,12 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
+	"reflect"
+	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/eclipse-kanto/software-update/internal/logger"
 )
@@ -32,6 +37,7 @@ const (
 	flagModuleType      = "moduleType"
 	flagArtifactType    = "artifactType"
 	flagInstall         = "install"
+	flagCert            = "serverCert"
 	flagLogFile         = "logFile"
 	flagLogLevel        = "logLevel"
 	flagLogFileSize     = "logFileSize"
@@ -58,45 +64,34 @@ var (
 )
 
 type cfg struct {
-	Broker          string   `json:"broker"`
-	Username        string   `json:"username"`
-	Password        string   `json:"password"`
-	StorageLocation string   `json:"storageLocation"`
-	FeatureID       string   `json:"featureId"`
-	ModuleType      string   `json:"moduleType"`
-	ArtifactType    string   `json:"artifactType"`
-	Install         []string `json:"install"`
-	LogFile         string   `json:"logFile"`
-	LogLevel        string   `json:"logLevel"`
-	LogFileSize     int      `json:"logFileSize"`
-	LogFileCount    int      `json:"logFileCount"`
-	LogFileMaxAge   int      `json:"logFileMaxAge"`
+	Broker          string   `json:"broker" def:"tcp://localhost:1883" descr:"Local MQTT broker address"`
+	Username        string   `json:"username" descr:"Username for authorized local client"`
+	Password        string   `json:"password" descr:"Password for authorized local client"`
+	StorageLocation string   `json:"storageLocation" descr:"Location of the storage"`
+	FeatureID       string   `json:"featureId" def:"SoftwareUpdatable" descr:"Feature identifier of SoftwareUpdatable"`
+	ModuleType      string   `json:"moduleType" def:"software" descr:"Module type of SoftwareUpdatable"`
+	ArtifactType    string   `json:"artifactType" def:"archive" descr:"Defines the module artifact type: archive or plane"`
+	Install         []string `json:"install" descr:"Defines the absolute path to install script"`
+	ServerCert      string   `json:"serverCert" descr:"A PEM encoded certificate \"file\" for secure artifact download"`
+	LogFile         string   `json:"logFile" def:"log/software-update.log" descr:"Log file location in storage directory"`
+	LogLevel        string   `json:"logLevel" def:"INFO" descr:"Log levels are ERROR, WARNING, INFO, DEBUG, TRACE"`
+	LogFileSize     int      `json:"logFileSize" def:"2" descr:"Log file size in MB before it gets rotated"`
+	LogFileCount    int      `json:"logFileCount" def:"5" descr:"Log file max rotations count"`
+	LogFileMaxAge   int      `json:"logFileMaxAge" def:"28" descr:"Log file rotations max age in days"`
 }
 
 // InitFlags tries to initialize Script-Based SoftwareUpdatable and Log configurations.
 // Returns true if version flag is specified for print version and exit. Returns error
 // if JSON configuration file cannot be read properly or missing config file is specified with flag.
 func InitFlags(version string) (*ScriptBasedSoftwareUpdatableConfig, *logger.LogConfig, error) {
-	flg := &cfg{}
+	flgConfig := &cfg{}
 	printVersion := flag.Bool(flagVersion, false, "Prints current version and exits")
 	configFile := flag.String(flagConfigFile, "", "Defines the configuration file")
 
 	// the install flag is set in the config object initially
 	flag.Var(&suConfig.InstallCommand, flagInstall, "Defines the absolute path to install script")
-	flag.StringVar(&flg.Broker, flagBroker, defaultBroker, "Local MQTT broker address")
-	flag.StringVar(&flg.Username, flagUsername, defaultUsername, "Username for authorized local client")
-	flag.StringVar(&flg.Password, flagPassword, defaultPassword, "Password for authorized local client")
-	flag.StringVar(&flg.StorageLocation, flagStorageLocation, defaultStorageLocation, "Location of the storage")
-	flag.StringVar(&flg.FeatureID, flagFeatureID, defaultFeatureID, "Feature identifier of SoftwareUpdatable")
-	flag.StringVar(&flg.ModuleType, flagModuleType, defaultModuleType, "Module type of SoftwareUpdatable")
-	flag.StringVar(&flg.ArtifactType, flagArtifactType, defaultArtifactType,
-		"Defines the module artifact type: archive or plane")
 
-	flag.StringVar(&flg.LogFile, flagLogFile, defaultLogFile, "Log file location in storage directory")
-	flag.StringVar(&flg.LogLevel, flagLogLevel, defaultLogLevel, "Log levels are ERROR, WARNING, INFO, DEBUG, TRACE")
-	flag.IntVar(&flg.LogFileSize, flagLogFileSize, defaultLogFileSize, "Log file size in MB before it gets rotated")
-	flag.IntVar(&flg.LogFileCount, flagLogFileCount, defaultLogFileCount, "Log file max rotations count")
-	flag.IntVar(&flg.LogFileMaxAge, flagLogFileMaxAge, defaultLogFileMaxAge, "Log file rotations max age in days")
+	initFlagsWithDefaultValues(flgConfig)
 	flag.Parse()
 
 	if *printVersion {
@@ -107,59 +102,79 @@ func InitFlags(version string) (*ScriptBasedSoftwareUpdatableConfig, *logger.Log
 	if err := applyConfigurationFile(*configFile); err != nil {
 		return nil, nil, err
 	}
-
-	applyFlags(flg)
+	applyFlags(flgConfig)
 	return suConfig, logConfig, nil
 }
 
-func applyFlags(flg *cfg) {
+func initFlagsWithDefaultValues(config interface{}) {
+	valueOf := reflect.ValueOf(config).Elem()
+	typeOf := valueOf.Type()
+	for i := 0; i < typeOf.NumField(); i++ {
+		fieldType := typeOf.Field(i)
+		defaultValue := fieldType.Tag.Get("def")
+		description := fieldType.Tag.Get("descr")
+		fieldValue := valueOf.FieldByName(fieldType.Name)
+		pointer := fieldValue.Addr().Interface()
+		flagName := toFlagName(fieldType.Name)
+		switch val := fieldValue.Interface(); val.(type) {
+		case string:
+			flag.StringVar(pointer.(*string), flagName, defaultValue, description)
+		case int:
+			value, err := strconv.Atoi(defaultValue)
+			if err != nil {
+				log.Printf("error parsing integer argument %v with value %v", fieldType.Name, defaultValue)
+			}
+			flag.IntVar(pointer.(*int), flagName, value, description)
+		}
+	}
+}
+
+func loadDefaultValues() *cfg {
+	result := &cfg{}
+	valueOf := reflect.ValueOf(result).Elem()
+	typeOf := valueOf.Type()
+	for i := 0; i < typeOf.NumField(); i++ {
+		fieldType := typeOf.Field(i)
+		defaultValue := fieldType.Tag.Get("def")
+		if len(defaultValue) > 0 {
+			fieldValue := valueOf.FieldByName(fieldType.Name)
+			switch fieldValue.Interface().(type) {
+			case string:
+				fieldValue.Set(reflect.ValueOf(defaultValue))
+			case int:
+				value, err := strconv.Atoi(defaultValue)
+				if err != nil {
+					log.Printf("error parsing integer argument %v with value %v", fieldType.Name, defaultValue)
+				}
+				fieldValue.Set(reflect.ValueOf(value))
+			}
+
+		}
+	}
+	return result
+}
+
+func applyFlags(flagsConfig interface{}) {
+	flagsConfigVal := reflect.ValueOf(flagsConfig).Elem()
+	suConfigVal := reflect.ValueOf(suConfig).Elem()
+	logConfigVal := reflect.ValueOf(logConfig).Elem()
 	flag.Visit(func(f *flag.Flag) {
-		switch name := f.Name; name {
-		case flagBroker:
-			suConfig.Broker = flg.Broker
-		case flagUsername:
-			suConfig.Username = flg.Username
-		case flagPassword:
-			suConfig.Password = flg.Password
-		case flagStorageLocation:
-			suConfig.StorageLocation = flg.StorageLocation
-		case flagFeatureID:
-			suConfig.FeatureID = flg.FeatureID
-		case flagModuleType:
-			suConfig.ModuleType = flg.ModuleType
-		case flagArtifactType:
-			suConfig.ArtifactType = flg.ArtifactType
-		case flagLogFile:
-			logConfig.LogFile = flg.LogFile
-		case flagLogLevel:
-			logConfig.LogLevel = flg.LogLevel
-		case flagLogFileSize:
-			logConfig.LogFileSize = flg.LogFileSize
-		case flagLogFileCount:
-			logConfig.LogFileCount = flg.LogFileCount
-		case flagLogFileMaxAge:
-			logConfig.LogFileMaxAge = flg.LogFileMaxAge
-		default:
-			// Unknown flag
+		name := toFieldName(f.Name)
+		srcFieldVal := flagsConfigVal.FieldByName(name)
+		if srcFieldVal.Kind() != reflect.Invalid {
+			dstFieldSu := suConfigVal.FieldByName(name)
+			dstFieldLog := logConfigVal.FieldByName(name)
+			if dstFieldSu.Kind() != reflect.Invalid {
+				dstFieldSu.Set(srcFieldVal)
+			} else if dstFieldLog.Kind() != reflect.Invalid {
+				dstFieldLog.Set(srcFieldVal)
+			}
 		}
 	})
 }
 
 func applyConfigurationFile(configFile string) error {
-	def := &cfg{
-		Broker:          defaultBroker,
-		Username:        defaultUsername,
-		Password:        defaultPassword,
-		StorageLocation: defaultStorageLocation,
-		FeatureID:       defaultFeatureID,
-		ModuleType:      defaultModuleType,
-		ArtifactType:    defaultArtifactType,
-		LogFile:         defaultLogFile,
-		LogLevel:        defaultLogLevel,
-		LogFileSize:     defaultLogFileSize,
-		LogFileCount:    defaultLogFileCount,
-		LogFileMaxAge:   defaultLogFileMaxAge,
-	}
+	def := loadDefaultValues()
 
 	// Load configuration file (if posible)
 	if len(configFile) > 0 {
@@ -176,13 +191,7 @@ func applyConfigurationFile(configFile string) error {
 	}
 
 	// Fulfil SoftwareUpdatable configuration with default/configuration values.
-	suConfig.Broker = def.Broker
-	suConfig.Username = def.Username
-	suConfig.Password = def.Password
-	suConfig.StorageLocation = def.StorageLocation
-	suConfig.FeatureID = def.FeatureID
-	suConfig.ModuleType = def.ModuleType
-	suConfig.ArtifactType = def.ArtifactType
+	copyConfigData(def, suConfig)
 
 	// Set install command only if install flag was not visited.
 	// If visited, the command is set initially in the config struct when it is defined.
@@ -193,11 +202,7 @@ func applyConfigurationFile(configFile string) error {
 	}
 
 	// Fulfil Log configuration with default/configuration values.
-	logConfig.LogFile = def.LogFile
-	logConfig.LogLevel = def.LogLevel
-	logConfig.LogFileSize = def.LogFileSize
-	logConfig.LogFileCount = def.LogFileCount
-	logConfig.LogFileMaxAge = def.LogFileMaxAge
+	copyConfigData(def, logConfig)
 	return nil
 }
 
@@ -209,4 +214,38 @@ func isNotVisited(name string) bool {
 		}
 	})
 	return res
+}
+
+func copyConfigData(sourceConfig interface{}, targetConfig interface{}) {
+	sourceConfigVal := reflect.ValueOf(sourceConfig).Elem()
+	targetConfigVal := reflect.ValueOf(targetConfig).Elem()
+	typeOfSourceConfig := sourceConfigVal.Type()
+	for i := 0; i < typeOfSourceConfig.NumField(); i++ {
+		fieldType := typeOfSourceConfig.Field(i)
+		fieldToSet := targetConfigVal.FieldByName(fieldType.Name)
+		if fieldToSet.Kind() != reflect.Invalid {
+			fieldToSet.Set(sourceConfigVal.FieldByName(fieldType.Name))
+		}
+	}
+}
+
+func toFieldName(s string) string {
+	s = replaceSuffix(s, "Id", "ID")
+	rn := []rune(s)
+	rn[0] = unicode.ToUpper(rn[0])
+	return string(rn)
+}
+
+func toFlagName(s string) string {
+	s = replaceSuffix(s, "ID", "Id")
+	rn := []rune(s)
+	rn[0] = unicode.ToLower(rn[0])
+	return string(rn)
+}
+
+func replaceSuffix(s, suff, replacement string) string {
+	if strings.HasSuffix(s, suff) {
+		return s[:len(s)-len(suff)] + replacement
+	}
+	return s
 }
