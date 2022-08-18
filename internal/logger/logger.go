@@ -40,7 +40,7 @@ type LogLevel int
 const (
 	// ERROR represents the error log level.
 	ERROR LogLevel = 1 + iota
-	// WARN represents the warning log level.
+	// WARN represents the warn log level.
 	WARN
 	// INFO represents the info log level.
 	INFO
@@ -52,7 +52,7 @@ const (
 	logFlags int = log.Ldate | log.Ltime | log.Lmicroseconds | log.Lmsgprefix
 
 	ePrefix = "ERROR  "
-	wPrefix = "WARNING"
+	wPrefix = "WARN   "
 	iPrefix = "INFO   "
 	dPrefix = "DEBUG  "
 	tPrefix = "TRACE  "
@@ -93,7 +93,7 @@ func SetupLogger(logConfig *LogConfig) io.WriteCloser {
 	switch strings.ToUpper(logConfig.LogLevel) {
 	case "INFO":
 		level = INFO
-	case "WARNING":
+	case "WARN":
 		level = WARN
 	case "DEBUG":
 		level = DEBUG
@@ -102,7 +102,6 @@ func SetupLogger(logConfig *LogConfig) io.WriteCloser {
 	default:
 		level = ERROR
 	}
-
 	lHawkbit := log.New(loggerOut, fmt.Sprintf(prefix, hawkbitPrefix), logFlags)
 	hawkbit.ERROR = &wrapper{logger: lHawkbit, level: ERROR, prefix: ePrefix}
 	hawkbit.WARN = &wrapper{logger: lHawkbit, level: WARN, prefix: wPrefix}
@@ -133,16 +132,16 @@ func Errorf(format string, v ...interface{}) {
 	}
 }
 
-// Warning writes an warning entry to the log.
-func Warning(v interface{}) {
+// Warn writes a warning entry to the log.
+func Warn(v interface{}) {
 	if level >= WARN {
 		logger.Println(wPrefix, v)
 	}
 }
 
-// Warningf formats according to a format specifier and write the string as an
+// Warnf formats according to a format specifier and write the string as a
 // warning entry to the log.
-func Warningf(format string, v ...interface{}) {
+func Warnf(format string, v ...interface{}) {
 	if level >= WARN {
 		logger.Printf(fmt.Sprint(wPrefix, " ", format), v...)
 	}

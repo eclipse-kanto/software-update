@@ -88,7 +88,7 @@ func load(name string) (p int, m string, c string, done bool) {
 	logger.Debugf("load status file: %s", name)
 	file, err := os.Open(name)
 	if err != nil {
-		logger.Warningf("failed to load status file: %s", name)
+		logger.Warnf("failed to load status file: %s", name)
 		return p, m, c, false
 	}
 	defer file.Close()
@@ -111,7 +111,7 @@ func load(name string) (p int, m string, c string, done bool) {
 			trailingNewline = true
 			return i + 1, trim(data[0:i]), nil
 		}
-		logger.Warning("mandatory trailing LF not found at the end of this file")
+		logger.Warn("mandatory trailing LF not found at the end of this file")
 		trailingNewline = false
 		return 0, nil, nil
 	})
@@ -147,7 +147,7 @@ func load(name string) (p int, m string, c string, done bool) {
 
 	// Trailing newline is a protection mechanism against not fully written files.
 	if !trailingNewline {
-		logger.Warning("trailing new line not found")
+		logger.Warn("trailing new line not found")
 		return p, m, c, false
 	}
 
