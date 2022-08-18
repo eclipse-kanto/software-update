@@ -34,6 +34,8 @@ import (
 
 const prefix = "_temporary-"
 
+var secureCiphers = supportedCipherSuites()
+
 // downloadArtifact tries to resume previous download operation or perform a new download.
 func downloadArtifact(to string, artifact *Artifact, progress progressBytes, serverCert string, done chan struct{}) error {
 	logger.Infof("Download [%s] to file [%s]", artifact.Link, to)
@@ -167,6 +169,7 @@ func requestDownload(link string, offset int64, serverCert string) (*http.Respon
 		config := &tls.Config{
 			InsecureSkipVerify: false,
 			RootCAs:            caCertPool,
+			CipherSuites:       secureCiphers,
 			MinVersion:         tls.VersionTLS12,
 			MaxVersion:         tls.VersionTLS13,
 		}
@@ -274,4 +277,13 @@ func checksum(fName string, hashType string) ([]byte, error) {
 		return nil, err
 	}
 	return hType.Sum(nil), nil
+}
+
+func supportedCipherSuites() []uint16 {
+	cs := tls.CipherSuites()
+	cid := make([]uint16, len(cs))
+	for i := range cs {
+		cid[i] = cs[i].ID
+	}
+	return cid
 }
