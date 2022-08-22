@@ -47,7 +47,7 @@ func isCertAddedToSystemPool(t *testing.T, certFile string) bool {
 		t.Logf("error reading certificate file %s - %v", certFile, err)
 		return false
 	}
-	block, _ := pem.Decode(data) // ignore rest bytes
+	block, _ := pem.Decode(data) // there is only one test certificate
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		t.Logf("error parsing certificate %s - %v", certFile, err)
@@ -67,8 +67,8 @@ func setSSLCerts(t *testing.T) {
 
 	// SystemCertPool does not work on Windows: https://github.com/golang/go/issues/16736
 	// Fixed in 1.18
-	if runtime.GOOS != "linux" {
-		t.Skip("this test only runs on Linux.")
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		t.Skip("this test does not run on windows and macOS, unless Go 1.18 is used.")
 	}
 	sslCertFile = os.Getenv(sslCertFileEnv)
 	err := os.Setenv(sslCertFileEnv, validCert)
