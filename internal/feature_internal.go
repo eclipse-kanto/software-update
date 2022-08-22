@@ -98,7 +98,13 @@ func (f *ScriptBasedSoftwareUpdatable) load() {
 }
 
 func (f *ScriptBasedSoftwareUpdatable) process() {
+	f.lock.Lock()
+	if !connected {
+		f.lock.Unlock()
+		return
+	}
 	wg.Add(1)
+	f.lock.Unlock()
 	defer wg.Done()
 
 	// Wait for operations or close signal.

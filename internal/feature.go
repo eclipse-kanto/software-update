@@ -29,8 +29,9 @@ const (
 )
 
 var (
-	wg   sync.WaitGroup
-	done = make(chan struct{})
+	wg        sync.WaitGroup
+	done      = make(chan struct{})
+	connected bool
 )
 
 // operationFunc returns true if operation is canceled.
@@ -62,8 +63,8 @@ type ScriptBasedSoftwareUpdatable struct {
 	installCommand *command
 }
 
-// NewScriptBasedSU creates a new Script-Based SoftwareUpdatable instance with the provided configuration.
-func NewScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*ScriptBasedSoftwareUpdatable, error) {
+// InitScriptBasedSU creates a new Script-Based SoftwareUpdatable instance, listening for edge configuration.
+func InitScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*EdgeConnector, error) {
 	logger.Infof("New Script-Based SoftwareUpdatable [Broker: %s, Type: %s]",
 		scriptSUPConfig.Broker, scriptSUPConfig.ModuleType)
 
@@ -85,26 +86,43 @@ func NewScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Scr
 	}
 
 	// Get the local edge configuration.
-	edge, mc, err := retrieveEdgeConfiguration(scriptSUPConfig.Broker, scriptSUPConfig.Username, scriptSUPConfig.Password)
+	edge, err := NewEdgeConnector(scriptSUPConfig, feature)
 	if err != nil {
 		return nil, err
 	}
-	feature.mqttClient = mc
-	return feature, feature.init(scriptSUPConfig, edge)
+	return edge, nil
 }
 
 // Connect the client to the configured Ditto endpoint.
 // If any error occurs during the connection's initiation - it's returned here.
-func (f *ScriptBasedSoftwareUpdatable) Connect() error {
+func (f *ScriptBasedSoftwareUpdatable) Connect(client MQTT.Client, scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig, edgeCfg *edgeConfiguration) error {
+	logger.Infof("Connecting to ditto endpoint with configuration - %v", edgeCfg)
+	f.mqttClient = client
+	done = make(chan struct{})
+	f.queue = make(chan operationFunc, 10)
+	f.lock.Lock()
+	connected = true
+	f.lock.Unlock()
+	err := f.init(scriptSUPConfig, edgeCfg)
+	if err != nil {
+		return err
+	}
 	return f.dittoClient.Connect()
 }
 
 // Disconnect the client from the configured Ditto endpoint.
-func (f *ScriptBasedSoftwareUpdatable) Disconnect() {
-	f.store.Close()
+func (f *ScriptBasedSoftwareUpdatable) Disconnect(closeStorage bool) {
+	if closeStorage {
+		f.store.Close()
+	}
+	f.lock.Lock()
+	connected = false
+	f.lock.Unlock()
 	close(done)
 	wg.Wait()
 	f.su.Deactivate()
+	logger.Info("ditto client unsubscribed")
+	f.dittoClient.Unsubscribe()
+	logger.Info("ditto client disconnected")
 	f.dittoClient.Disconnect()
-	f.mqttClient.Disconnect(250)
 }

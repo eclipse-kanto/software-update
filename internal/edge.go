@@ -13,7 +13,6 @@ package feature
 
 import (
 	"encoding/json"
-	"errors"
 
 	"github.com/eclipse-kanto/software-update/internal/logger"
 
@@ -32,55 +31,79 @@ type edgeConfiguration struct {
 	PolicyID string `json:"policyId"`
 }
 
-var edgeConfigurationChan = make(chan *edgeConfiguration, 1)
+// EdgeConnector listens for Edge Thing configuration changes and notifies the corresponding EdgeClient
+type EdgeConnector struct {
+	mqttClient MQTT.Client
+	cfg        *edgeConfiguration
+	edgeClient EdgeClient
+}
 
-// retrieveEdgeConfiguration tries to connect to the local MQTT broker and retrieve its configuration.
-func retrieveEdgeConfiguration(server string, username string, password string) (*edgeConfiguration, MQTT.Client, error) {
-	logger.Infof("Retrieve edge configuration from: %s", server)
+// EdgeClient receives notifications of Edge Thing configuration changes from EdgeConnector
+type EdgeClient interface {
+	Connect(client MQTT.Client, scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig, cfg *edgeConfiguration) error
+	Disconnect(closeStorage bool)
+}
+
+// NewEdgeConnector create EdgeConnector with the given server, username and password for the given EdgeClient
+func NewEdgeConnector(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig, ecl EdgeClient) (*EdgeConnector, error) {
+	logger.Infof("creating edge connector with configuration: %s", scriptSUPConfig)
 	opts := MQTT.NewClientOptions().
-		AddBroker(server).
+		AddBroker(scriptSUPConfig.Broker).
 		SetClientID(uuid.New().String()).
 		SetKeepAlive(defaultKeepAlive).
 		SetCleanSession(true).
-		SetAutoReconnect(true).
-		SetOnConnectHandler(edgeConnectHandler)
-	if len(username) > 0 {
-		opts = opts.SetUsername(username).SetPassword(password)
+		SetAutoReconnect(true)
+	if len(scriptSUPConfig.Username) > 0 {
+		opts = opts.SetUsername(scriptSUPConfig.Username).SetPassword(scriptSUPConfig.Password)
 	}
 
-	mqttClient := MQTT.NewClient(opts)
-
-	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		return nil, nil, token.Error()
+	p := &EdgeConnector{mqttClient: MQTT.NewClient(opts), edgeClient: ecl}
+	if token := p.mqttClient.Connect(); token.Wait() && token.Error() != nil {
+		return nil, token.Error()
 	}
 
-	defer mqttClient.Unsubscribe(topic)
-
-	cfg := <-edgeConfigurationChan
-	if cfg == nil {
-		return nil, nil, errors.New("fail to retrieve edge configuration")
-	}
-	logger.Infof("Edge [TenantID: %s, DeviceID: %s, PolicyID: %s]", cfg.TenantID, cfg.DeviceID, cfg.PolicyID)
-	return cfg, mqttClient, nil
-}
-
-func edgeConnectHandler(client MQTT.Client) {
-	if token := client.Subscribe(topic, 1, func(client MQTT.Client, message MQTT.Message) {
+	if token := p.mqttClient.Subscribe(topic, 1, func(client MQTT.Client, message MQTT.Message) {
 		localCfg := &edgeConfiguration{}
 		err := json.Unmarshal(message.Payload(), localCfg)
 		if err != nil {
 			logger.Errorf("could not unmarshal edge configuration: %v", err)
-			edgeConfigurationChan <- nil
 			return
 		}
-		edgeConfigurationChan <- localCfg
+
+		if p.cfg == nil || *localCfg != *p.cfg {
+			logger.Infof("apply edge configuration: %v", localCfg)
+			if p.cfg != nil {
+				p.edgeClient.Disconnect(false)
+			}
+			p.cfg = localCfg
+			err = ecl.Connect(p.mqttClient, scriptSUPConfig, p.cfg)
+			if err != nil {
+				logger.Errorf("error connecting to broker: %v", err)
+			} else {
+				logger.Infof("Edge [TenantID: %s, DeviceID: %s, PolicyID: %s]", p.cfg.TenantID, p.cfg.DeviceID, p.cfg.PolicyID)
+			}
+		}
 	}); token.Wait() && token.Error() != nil {
 		logger.Errorf("fail to subscribe for %s topic: %v", topic, token.Error())
-		edgeConfigurationChan <- nil
+		return nil, token.Error()
+	}
+	logger.Info("ditto client subscribed")
+
+	if token := p.mqttClient.Publish("edge/thing/request", 1, false, ""); token.Wait() && token.Error() != nil {
+		logger.Errorf("fail to publish a message with %s topic: %v", topic, token.Error())
+		return nil, token.Error()
+	}
+	return p, nil
+}
+
+// Close the EdgeConnector
+func (p *EdgeConnector) Close() {
+	if p.cfg != nil {
+		p.edgeClient.Disconnect(true)
 	}
 
-	if token := client.Publish("edge/thing/request", 1, false, ""); token.Wait() && token.Error() != nil {
-		logger.Errorf("fail to publish a message with %s topic: %v", topic, token.Error())
-		edgeConfigurationChan <- nil
-	}
+	p.mqttClient.Unsubscribe(topic)
+	p.mqttClient.Disconnect(200)
+
+	logger.Info("disconnected from MQTT broker")
 }

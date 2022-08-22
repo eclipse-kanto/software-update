@@ -45,7 +45,10 @@ func TestScriptBasedConstructor(t *testing.T) {
 	}
 
 	// 1. Try to create new ScriptBasedSoftwareUpdatable with wrong broker URL.
-	if _, err := NewScriptBasedSU(cfg); err == nil {
+	if su, err := InitScriptBasedSU(cfg); err == nil {
+		if su != nil {
+			defer su.Close()
+		}
 		t.Fatalf("fail to validate with unknown broker host: %v", err)
 	}
 }
@@ -127,7 +130,7 @@ func TestScriptBasedCore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to initialize ScriptBasedSoftwareUpdatable: %v", err)
 	}
-	defer feature.Disconnect()
+	defer feature.Disconnect(true)
 
 	testDownloadInstall(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), t)
 
