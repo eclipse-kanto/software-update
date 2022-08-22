@@ -275,7 +275,7 @@ func TestInitFlagsWithConfigMixedContent(t *testing.T) {
 		FeatureID:       getDefaultFlagValue(t, flagFeatureID),
 		ArtifactType:    getDefaultFlagValue(t, flagArtifactType),
 		ModuleType:      getDefaultFlagValue(t, flagModuleType),
-		StorageLocation: "",
+		StorageLocation: "./",
 		Username:        "test",
 		Password:        "",
 	}
