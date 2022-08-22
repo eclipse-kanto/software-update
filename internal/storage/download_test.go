@@ -12,21 +12,87 @@
 package storage
 
 import (
+	"crypto/x509"
+	"encoding/pem"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
-	"strings"
 	"testing"
 )
 
 const (
-	validCert     = "testdata/valid_cert.pem"
-	validKey      = "testdata/valid_key.pem"
-	expiredCert   = "testdata/expired_cert.pem"
-	expiredKey    = "testdata/expired_key.pem"
-	untrustedCert = "testdata/untrusted_cert.pem"
-	untrustedKey  = "testdata/untrusted_key.pem"
+	validCert      = "testdata/valid_cert.pem"
+	validKey       = "testdata/valid_key.pem"
+	expiredCert    = "testdata/expired_cert.pem"
+	expiredKey     = "testdata/expired_key.pem"
+	untrustedCert  = "testdata/untrusted_cert.pem"
+	untrustedKey   = "testdata/untrusted_key.pem"
+	sslCertFileEnv = "SSL_CERT_FILE"
 )
+
+var sslCertFile string
+
+func isCertAddedToSystemPool(t *testing.T, certFile string) bool {
+	t.Helper()
+
+	certs, err := x509.SystemCertPool()
+	if err != nil {
+		t.Logf("error getting system certificate pool - %v", err)
+		return false
+	}
+	data, err := ioutil.ReadFile(certFile)
+	if err != nil {
+		t.Logf("error reading certificate file %s - %v", certFile, err)
+		return false
+	}
+	block, _ := pem.Decode(data) // ignore rest bytes, there is only one test certificate
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Logf("error parsing certificate %s - %v", certFile, err)
+		return false
+	}
+	subjects := certs.Subjects()
+	for i := 0; i < len(subjects); i++ {
+		if reflect.DeepEqual(subjects[i], cert.RawSubject) {
+			return true
+		}
+	}
+	return false
+}
+
+func setSSLCerts(t *testing.T) {
+	t.Helper()
+
+	// SystemCertPool does not work on Windows: https://github.com/golang/go/issues/16736
+	// Fixed in 1.18
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		t.Skip("this test does not run on windows and macOS")
+	}
+	sslCertFile = os.Getenv(sslCertFileEnv)
+	err := os.Setenv(sslCertFileEnv, validCert)
+	if err != nil {
+		t.Skipf("cannot set %s environment variable", sslCertFileEnv)
+	}
+	if !isCertAddedToSystemPool(t, validCert) {
+		t.Skipf("cannot setup test case by adding certificate %s to system certificate pool", validCert)
+	}
+}
+
+func unsetSSLCerts(t *testing.T) {
+	t.Helper()
+
+	if len(sslCertFile) > 0 {
+		if err := os.Setenv(sslCertFileEnv, sslCertFile); err != nil {
+			t.Logf("cannot restore %s environment variable initial value - %s", sslCertFileEnv, sslCertFile)
+		}
+	} else {
+		if err := os.Unsetenv(sslCertFileEnv); err != nil {
+			t.Logf("cannot unset %s environment variable", sslCertFileEnv)
+		}
+	}
+}
 
 // TestDownloadToFile tests downloadToFile function, using non-secure protocol(s).
 func TestDownloadToFile(t *testing.T) {
@@ -51,24 +117,8 @@ func TestDownloadToFile(t *testing.T) {
 
 // TestDownloadToFileSecureSystemPool tests downloadToFile function, using secure protocol(s) and certificates from system pool.
 func TestDownloadToFileSecureSystemPool(t *testing.T) {
-	// SystemCertPool does not work on Windows: https://github.com/golang/go/issues/16736
-	// Fixed in 1.18
-	if runtime.GOOS != "linux" {
-		t.Skip("this test only runs on Linux.")
-	}
-	sslCertFile := os.Getenv("SSL_CERT_FILE")
-	certFiles := strings.Split(sslCertFile, string(os.PathListSeparator))
-	containsTestCert := false
-	for _, file := range certFiles {
-		if strings.HasSuffix(strings.TrimSpace(file), filepath.Base(validCert)) {
-			containsTestCert = true
-			break
-		}
-	}
-	if !containsTestCert {
-		t.Skipf("Please set SSL_CERT_FILE variable to point to the location"+
-			" of %s certificate file. Current value is \"%s\".", validCert, sslCertFile)
-	}
+	setSSLCerts(t)
+	defer unsetSSLCerts(t)
 	testDownloadToFileSecure("", "", t)
 }
 
