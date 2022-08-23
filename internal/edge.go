@@ -81,7 +81,7 @@ func newEdgeConnector(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig, ecl e
 			if err != nil {
 				logger.Errorf("error connecting to broker: %v", err)
 			} else {
-				logger.Infof("Edge [TenantID: %s, DeviceID: %s, PolicyID: %s]", p.cfg.TenantID, p.cfg.DeviceID, p.cfg.PolicyID)
+				logger.Infof("edge [TenantID: %s, DeviceID: %s, PolicyID: %s]", p.cfg.TenantID, p.cfg.DeviceID, p.cfg.PolicyID)
 			}
 		}
 	}); token.Wait() && token.Error() != nil {
