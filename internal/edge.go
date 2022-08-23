@@ -31,7 +31,8 @@ type edgeConfiguration struct {
 	PolicyID string `json:"policyId"`
 }
 
-// EdgeConnector listens for Edge Thing configuration changes and notifies the corresponding EdgeClient
+// EdgeConnector listens for Edge Thing configuration changes and notifies the corresponding EdgeClient.
+// It is used in the main package.
 type EdgeConnector struct {
 	mqttClient MQTT.Client
 	cfg        *edgeConfiguration
