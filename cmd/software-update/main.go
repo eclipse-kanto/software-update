@@ -40,7 +40,7 @@ func main() {
 		logger.Errorf("failed to create script-based software updatable: %v", err)
 		os.Exit(1)
 	}
-	defer edgeCtr.Close()
+	defer edgeCtr.Close() // not nil
 
 	chWaitCtrlC := make(chan os.Signal, 1)
 	signal.Notify(chWaitCtrlC, os.Interrupt)

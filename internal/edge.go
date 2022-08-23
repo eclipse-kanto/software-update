@@ -24,14 +24,14 @@ const (
 	topic = "edge/thing/response"
 )
 
-// edgeConfiguration represents local Edge Thing configuration. Its device, tenand and prolicy identifiers.
+// edgeConfiguration represents local Edge Thing configuration. Its device, tenant and policy identifiers.
 type edgeConfiguration struct {
 	DeviceID string `json:"deviceId"`
 	TenantID string `json:"tenantId"`
 	PolicyID string `json:"policyId"`
 }
 
-// EdgeConnector listens for Edge Thing configuration changes and notifies the corresponding EdgeClient.
+// EdgeConnector listens for Edge Thing configuration changes and notifies the corresponding edgeClient.
 // It is used in the main package.
 type EdgeConnector struct {
 	mqttClient MQTT.Client
@@ -45,7 +45,7 @@ type edgeClient interface {
 	Disconnect(closeStorage bool)
 }
 
-// newEdgeConnector create EdgeConnector with the given server, username and password for the given EdgeClient
+// newEdgeConnector creates EdgeConnector with the provided configuration for the given edgeClient
 func newEdgeConnector(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig, ecl edgeClient) (*EdgeConnector, error) {
 	logger.Infof("creating edge connector with configuration: %s", scriptSUPConfig)
 	opts := MQTT.NewClientOptions().

@@ -88,6 +88,7 @@ func InitScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Ed
 	// Get the local edge configuration.
 	edge, err := newEdgeConnector(scriptSUPConfig, feature)
 	if err != nil {
+		localStorage.Close()
 		return nil, err
 	}
 	return edge, nil
