@@ -80,18 +80,17 @@ func mockScriptBasedSoftwareUpdatable(t *testing.T, tc *testConfig) (*ScriptBase
 	}
 
 	// Initialize mocked ScriptBasedSoftwareUpdatable
-	if err := feature.init(&ScriptBasedSoftwareUpdatableConfig{
+	supConfig := &ScriptBasedSoftwareUpdatableConfig{
 		Broker:     getDefaultFlagValue(t, flagBroker),
 		FeatureID:  tc.featureID,
 		ModuleType: getDefaultFlagValue(t, flagModuleType),
-	}, &edgeConfiguration{
+	}
+	edgeCfg := &edgeConfiguration{
 		DeviceID: model.NewNamespacedID(testTopicNamespace, testTopicEntryID).String(),
 		TenantID: testTenantID,
-	}); err != nil {
-		return nil, nil, err
 	}
-	if err := feature.Connect(); err != nil {
-		t.Fatalf("failed to connect the feature: %v", err)
+	if err := feature.Connect(mc, supConfig, edgeCfg); err != nil { // calls feature.init(...)
+		return nil, nil, err
 	}
 
 	// Wait for Ditto client to initialize.
