@@ -99,7 +99,7 @@ func (f *ScriptBasedSoftwareUpdatable) load() {
 
 func (f *ScriptBasedSoftwareUpdatable) process() {
 	f.lock.Lock()
-	if !connected {
+	if !featureAvailable {
 		f.lock.Unlock()
 		return
 	}

@@ -29,9 +29,9 @@ const (
 )
 
 var (
-	wg        sync.WaitGroup
-	done      = make(chan struct{})
-	connected bool
+	wg               sync.WaitGroup
+	done             = make(chan struct{})
+	featureAvailable bool
 )
 
 // operationFunc returns true if operation is canceled.
@@ -86,11 +86,17 @@ func InitScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Ed
 	}
 
 	// Get the local edge configuration.
-	edge, err := NewEdgeConnector(scriptSUPConfig, feature)
+	edge, err := newEdgeConnector(scriptSUPConfig, feature)
 	if err != nil {
 		return nil, err
 	}
 	return edge, nil
+}
+
+func (f *ScriptBasedSoftwareUpdatable) setAvailable(available bool) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	featureAvailable = available
 }
 
 // Connect the client to the configured Ditto endpoint.
@@ -100,24 +106,24 @@ func (f *ScriptBasedSoftwareUpdatable) Connect(client MQTT.Client, scriptSUPConf
 	f.mqttClient = client
 	done = make(chan struct{})
 	f.queue = make(chan operationFunc, 10)
-	f.lock.Lock()
-	connected = true
-	f.lock.Unlock()
 	err := f.init(scriptSUPConfig, edgeCfg)
 	if err != nil {
 		return err
 	}
-	return f.dittoClient.Connect()
+	f.setAvailable(true)
+	if err := f.dittoClient.Connect(); err != nil {
+		f.setAvailable(false)
+		return err
+	}
+	return nil
 }
 
 // Disconnect the client from the configured Ditto endpoint.
 func (f *ScriptBasedSoftwareUpdatable) Disconnect(closeStorage bool) {
+	f.setAvailable(false)
 	if closeStorage {
 		f.store.Close()
 	}
-	f.lock.Lock()
-	connected = false
-	f.lock.Unlock()
 	close(done)
 	wg.Wait()
 	f.su.Deactivate()

@@ -35,17 +35,17 @@ type edgeConfiguration struct {
 type EdgeConnector struct {
 	mqttClient MQTT.Client
 	cfg        *edgeConfiguration
-	edgeClient EdgeClient
+	edgeClient edgeClient
 }
 
-// EdgeClient receives notifications of Edge Thing configuration changes from EdgeConnector
-type EdgeClient interface {
+// edgeClient receives notifications of Edge Thing configuration changes from EdgeConnector
+type edgeClient interface {
 	Connect(client MQTT.Client, scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig, cfg *edgeConfiguration) error
 	Disconnect(closeStorage bool)
 }
 
-// NewEdgeConnector create EdgeConnector with the given server, username and password for the given EdgeClient
-func NewEdgeConnector(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig, ecl EdgeClient) (*EdgeConnector, error) {
+// newEdgeConnector create EdgeConnector with the given server, username and password for the given EdgeClient
+func newEdgeConnector(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig, ecl edgeClient) (*EdgeConnector, error) {
 	logger.Infof("creating edge connector with configuration: %s", scriptSUPConfig)
 	opts := MQTT.NewClientOptions().
 		AddBroker(scriptSUPConfig.Broker).
