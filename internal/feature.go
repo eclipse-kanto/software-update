@@ -12,6 +12,7 @@
 package feature
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -39,28 +40,32 @@ type operationFunc func() bool
 
 // ScriptBasedSoftwareUpdatableConfig provides the Script-Based SoftwareUpdatable configuration.
 type ScriptBasedSoftwareUpdatableConfig struct {
-	Broker          string
-	Username        string
-	Password        string
-	StorageLocation string
-	FeatureID       string
-	ModuleType      string
-	ArtifactType    string
-	ServerCert      string
-	InstallCommand  command
+	Broker                string
+	Username              string
+	Password              string
+	StorageLocation       string
+	FeatureID             string
+	ModuleType            string
+	ArtifactType          string
+	ServerCert            string
+	DownloadRetryCount    int
+	DownloadRetryInterval int
+	InstallCommand        command
 }
 
 // ScriptBasedSoftwareUpdatable is the Script-Based SoftwareUpdatable actual implementation.
 type ScriptBasedSoftwareUpdatable struct {
-	lock           sync.Mutex
-	queue          chan operationFunc
-	store          *storage.Storage
-	su             *hawkbit.SoftwareUpdatable
-	dittoClient    *ditto.Client
-	mqttClient     MQTT.Client
-	artifactType   string
-	serverCert     string
-	installCommand *command
+	lock                  sync.Mutex
+	queue                 chan operationFunc
+	store                 *storage.Storage
+	su                    *hawkbit.SoftwareUpdatable
+	dittoClient           *ditto.Client
+	mqttClient            MQTT.Client
+	artifactType          string
+	serverCert            string
+	downloadRetryCount    int
+	downloadRetryInterval int
+	installCommand        *command
 }
 
 // InitScriptBasedSU creates a new Script-Based SoftwareUpdatable instance, listening for edge configuration.
@@ -78,7 +83,12 @@ func InitScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Ed
 		store: localStorage,
 		// Build install script command
 		installCommand: &scriptSUPConfig.InstallCommand,
-		serverCert:     scriptSUPConfig.ServerCert,
+		// Server download certificate
+		serverCert: scriptSUPConfig.ServerCert,
+		// Number of download reattempts
+		downloadRetryCount: scriptSUPConfig.DownloadRetryCount,
+		// Interval between download reattempts
+		downloadRetryInterval: scriptSUPConfig.DownloadRetryInterval,
 		// Define the module artifact(s) type: archive or plane
 		artifactType: scriptSUPConfig.ArtifactType,
 		// Create queue with size 10
@@ -132,4 +142,15 @@ func (f *ScriptBasedSoftwareUpdatable) Disconnect(closeStorage bool) {
 	f.dittoClient.Unsubscribe()
 	logger.Info("ditto client disconnected")
 	f.dittoClient.Disconnect()
+}
+
+// Validate the software updatable configuration
+func (scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) Validate() error {
+	if scriptSUPConfig.DownloadRetryInterval <= 0 {
+		return fmt.Errorf("non positive download retry interval value - %d", scriptSUPConfig.DownloadRetryInterval)
+	}
+	if scriptSUPConfig.DownloadRetryCount < 0 {
+		return fmt.Errorf("negative download retry count value - %d", scriptSUPConfig.DownloadRetryCount)
+	}
+	return nil
 }

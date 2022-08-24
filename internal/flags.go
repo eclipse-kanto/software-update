@@ -43,6 +43,8 @@ const (
 	flagLogFileSize     = "logFileSize"
 	flagLogFileCount    = "logFileCount"
 	flagLogFileMaxAge   = "logFileMaxAge"
+	flagRetryCount      = "downloadRetryCount"
+	flagRetryInterval   = "downloadRetryInterval"
 )
 
 var (
@@ -51,20 +53,22 @@ var (
 )
 
 type cfg struct {
-	Broker          string   `json:"broker" def:"tcp://localhost:1883" descr:"Local MQTT broker address"`
-	Username        string   `json:"username" descr:"Username for authorized local client"`
-	Password        string   `json:"password" descr:"Password for authorized local client"`
-	StorageLocation string   `json:"storageLocation" def:"." descr:"Location of the storage"`
-	FeatureID       string   `json:"featureId" def:"SoftwareUpdatable" descr:"Feature identifier of SoftwareUpdatable"`
-	ModuleType      string   `json:"moduleType" def:"software" descr:"Module type of SoftwareUpdatable"`
-	ArtifactType    string   `json:"artifactType" def:"archive" descr:"Defines the module artifact type: archive or plane"`
-	Install         []string `json:"install" descr:"Defines the absolute path to install script"`
-	ServerCert      string   `json:"serverCert" descr:"A PEM encoded certificate \"file\" for secure artifact download"`
-	LogFile         string   `json:"logFile" def:"log/software-update.log" descr:"Log file location in storage directory"`
-	LogLevel        string   `json:"logLevel" def:"INFO" descr:"Log levels are ERROR, WARN, INFO, DEBUG, TRACE"`
-	LogFileSize     int      `json:"logFileSize" def:"2" descr:"Log file size in MB before it gets rotated"`
-	LogFileCount    int      `json:"logFileCount" def:"5" descr:"Log file max rotations count"`
-	LogFileMaxAge   int      `json:"logFileMaxAge" def:"28" descr:"Log file rotations max age in days"`
+	Broker                string   `json:"broker" def:"tcp://localhost:1883" descr:"Local MQTT broker address"`
+	Username              string   `json:"username" descr:"Username for authorized local client"`
+	Password              string   `json:"password" descr:"Password for authorized local client"`
+	StorageLocation       string   `json:"storageLocation" def:"." descr:"Location of the storage"`
+	FeatureID             string   `json:"featureId" def:"SoftwareUpdatable" descr:"Feature identifier of SoftwareUpdatable"`
+	ModuleType            string   `json:"moduleType" def:"software" descr:"Module type of SoftwareUpdatable"`
+	ArtifactType          string   `json:"artifactType" def:"archive" descr:"Defines the module artifact type: archive or plane"`
+	Install               []string `json:"install" descr:"Defines the absolute path to install script"`
+	ServerCert            string   `json:"serverCert" descr:"A PEM encoded certificate \"file\" for secure artifact download"`
+	DownloadRetryCount    int      `json:"downloadRetryCount" def:"0" descr:"The number of retries, in case download of an artifact fails.\n By default no retries are supported."`
+	DownloadRetryInterval int      `json:"downloadRetryInterval" def:"5" descr:"The interval between retries(in seconds) for an unsuccessful download."`
+	LogFile               string   `json:"logFile" def:"log/software-update.log" descr:"Log file location in storage directory"`
+	LogLevel              string   `json:"logLevel" def:"INFO" descr:"Log levels are ERROR, WARN, INFO, DEBUG, TRACE"`
+	LogFileSize           int      `json:"logFileSize" def:"2" descr:"Log file size in MB before it gets rotated"`
+	LogFileCount          int      `json:"logFileCount" def:"5" descr:"Log file max rotations count"`
+	LogFileMaxAge         int      `json:"logFileMaxAge" def:"28" descr:"Log file rotations max age in days"`
 }
 
 // InitFlags tries to initialize Script-Based SoftwareUpdatable and Log configurations.
