@@ -49,7 +49,7 @@ type ScriptBasedSoftwareUpdatableConfig struct {
 	ArtifactType          string
 	ServerCert            string
 	DownloadRetryCount    int
-	DownloadRetryInterval Duration
+	DownloadRetryInterval durationTime
 	InstallCommand        command
 }
 
@@ -64,7 +64,7 @@ type ScriptBasedSoftwareUpdatable struct {
 	artifactType          string
 	serverCert            string
 	downloadRetryCount    int
-	downloadRetryInterval Duration
+	downloadRetryInterval time.Duration
 	installCommand        *command
 }
 
@@ -88,7 +88,7 @@ func InitScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Ed
 		// Number of download reattempts
 		downloadRetryCount: scriptSUPConfig.DownloadRetryCount,
 		// Interval between download reattempts
-		downloadRetryInterval: scriptSUPConfig.DownloadRetryInterval,
+		downloadRetryInterval: time.Duration(scriptSUPConfig.DownloadRetryInterval),
 		// Define the module artifact(s) type: archive or plane
 		artifactType: scriptSUPConfig.ArtifactType,
 		// Create queue with size 10
