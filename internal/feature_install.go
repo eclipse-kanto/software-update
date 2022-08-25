@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/eclipse-kanto/software-update/hawkbit"
 	"github.com/eclipse-kanto/software-update/internal/logger"
@@ -130,7 +131,7 @@ Started:
 Downloading:
 	if opError = f.store.DownloadModule(dir, module, func(progress int) {
 		setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading).WithProgress(progress))
-	}, f.serverCert, f.downloadRetryCount, f.downloadRetryInterval); opError != nil {
+	}, f.serverCert, f.downloadRetryCount, time.Duration(f.downloadRetryInterval)); opError != nil {
 		opErrorMsg = errDownload
 		return opError == storage.ErrCancel
 	}

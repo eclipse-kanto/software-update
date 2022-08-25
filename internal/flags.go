@@ -62,8 +62,8 @@ type cfg struct {
 	ArtifactType          string   `json:"artifactType" def:"archive" descr:"Defines the module artifact type: archive or plane"`
 	Install               []string `json:"install" descr:"Defines the absolute path to install script"`
 	ServerCert            string   `json:"serverCert" descr:"A PEM encoded certificate \"file\" for secure artifact download"`
-	DownloadRetryCount    int      `json:"downloadRetryCount" def:"0" descr:"The number of retries, in case download of an artifact fails.\n By default no retries are supported."`
-	DownloadRetryInterval int      `json:"downloadRetryInterval" def:"5" descr:"The interval between retries(in seconds) for an unsuccessful download."`
+	DownloadRetryCount    int      `json:"downloadRetryCount" def:"0" descr:"The number of retries, in case of a failed download.\n By default no retries are supported."`
+	DownloadRetryInterval Duration `json:"downloadRetryInterval" def:"5s" descr:"The interval between retries, in case of a failed download.\n Should be a sequence of decimal numbers, each with optional fraction and a unit suffix, such as '300ms', '1.5h', '10m30s', etc. Valid time units are 'ns', 'us' (or 'µs'), 'ms', 's', 'm', 'h'."`
 	LogFile               string   `json:"logFile" def:"log/software-update.log" descr:"Log file location in storage directory"`
 	LogLevel              string   `json:"logLevel" def:"INFO" descr:"Log levels are ERROR, WARN, INFO, DEBUG, TRACE"`
 	LogFileSize           int      `json:"logFileSize" def:"2" descr:"Log file size in MB before it gets rotated"`
@@ -84,7 +84,6 @@ func InitFlags(version string) (*ScriptBasedSoftwareUpdatableConfig, *logger.Log
 
 	initFlagsWithDefaultValues(flgConfig)
 	flag.Parse()
-
 	if *printVersion {
 		fmt.Println(version)
 		os.Exit(0)
@@ -116,6 +115,13 @@ func initFlagsWithDefaultValues(config interface{}) {
 				log.Printf("error parsing integer argument %v with value %v", fieldType.Name, defaultValue)
 			}
 			flag.IntVar(pointer.(*int), flagName, value, description)
+		case Duration:
+			v, ok := pointer.(flag.Value)
+			if ok {
+				flag.Var(v, flagName, description)
+			} else {
+				log.Println("custom type Duration must implement reflect.Value interface")
+			}
 		}
 	}
 }
@@ -127,6 +133,8 @@ func loadDefaultValues() *cfg {
 	for i := 0; i < typeOf.NumField(); i++ {
 		fieldType := typeOf.Field(i)
 		defaultValue := fieldType.Tag.Get("def")
+		fieldValue := valueOf.FieldByName(fieldType.Name)
+		pointer := fieldValue.Addr().Interface()
 		if len(defaultValue) > 0 {
 			fieldValue := valueOf.FieldByName(fieldType.Name)
 			switch fieldValue.Interface().(type) {
@@ -138,6 +146,17 @@ func loadDefaultValues() *cfg {
 					log.Printf("error parsing integer argument %v with value %v", fieldType.Name, defaultValue)
 				}
 				fieldValue.Set(reflect.ValueOf(value))
+			case Duration:
+				v, ok := pointer.(flag.Value)
+				if ok {
+					if err := v.Set(defaultValue); err == nil {
+						fieldValue.Set(reflect.ValueOf(v).Elem())
+					} else {
+						log.Printf("error parsing argument %v with value %v - %v", fieldType.Name, defaultValue, err)
+					}
+				} else {
+					log.Println("custom type Duration must implement reflect.Value interface")
+				}
 			}
 
 		}
@@ -167,7 +186,7 @@ func applyFlags(flagsConfig interface{}) {
 func applyConfigurationFile(configFile string) error {
 	def := loadDefaultValues()
 
-	// Load configuration file (if posible)
+	// Load configuration file (if possible)
 	if len(configFile) > 0 {
 		if jf, err := os.Open(configFile); err == nil {
 			defer jf.Close()

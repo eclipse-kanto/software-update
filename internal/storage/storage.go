@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/eclipse-kanto/software-update/hawkbit"
 	"github.com/eclipse-kanto/software-update/internal/logger"
@@ -212,7 +213,7 @@ func (st *Storage) ArchiveModule(dir string) error {
 
 // DownloadModule artifacts to local storage.
 func (st *Storage) DownloadModule(toDir string, module *Module, progress Progress, serverCert string,
-	retryCount int, retryInterval int) (err error) {
+	retryCount int, retryInterval time.Duration) (err error) {
 	logger.Debugf("Download module to directory: [%s]", toDir)
 	logger.Tracef("Module: %v", module)
 	if err = os.MkdirAll(toDir, 0755); err != nil {

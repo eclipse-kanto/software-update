@@ -49,7 +49,7 @@ type ScriptBasedSoftwareUpdatableConfig struct {
 	ArtifactType          string
 	ServerCert            string
 	DownloadRetryCount    int
-	DownloadRetryInterval int
+	DownloadRetryInterval Duration
 	InstallCommand        command
 }
 
@@ -64,7 +64,7 @@ type ScriptBasedSoftwareUpdatable struct {
 	artifactType          string
 	serverCert            string
 	downloadRetryCount    int
-	downloadRetryInterval int
+	downloadRetryInterval Duration
 	installCommand        *command
 }
 
@@ -146,9 +146,6 @@ func (f *ScriptBasedSoftwareUpdatable) Disconnect(closeStorage bool) {
 
 // Validate the software updatable configuration
 func (scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) Validate() error {
-	if scriptSUPConfig.DownloadRetryInterval <= 0 {
-		return fmt.Errorf("non positive download retry interval value - %d", scriptSUPConfig.DownloadRetryInterval)
-	}
 	if scriptSUPConfig.DownloadRetryCount < 0 {
 		return fmt.Errorf("negative download retry count value - %d", scriptSUPConfig.DownloadRetryCount)
 	}

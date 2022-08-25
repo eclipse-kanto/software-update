@@ -38,7 +38,7 @@ const prefix = "_temporary-"
 var secureCiphers = supportedCipherSuites()
 
 // downloadArtifact tries to resume previous download operation or perform a new download.
-func downloadArtifact(to string, artifact *Artifact, progress progressBytes, serverCert string, retryCount int, retryInterval int,
+func downloadArtifact(to string, artifact *Artifact, progress progressBytes, serverCert string, retryCount int, retryInterval time.Duration,
 	done chan struct{}) error {
 	logger.Infof("download [%s] to file [%s]", artifact.Link, to)
 
@@ -83,13 +83,13 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, ser
 		}
 	} else {
 		// No available previous download, perform a full download.
-		response, err := getDownloadResponse(artifact.Link, 0, serverCert, &retryCount, retryInterval)
+		response, remainingRetries, err := robustDownload(artifact.Link, 0, serverCert, retryCount, retryInterval)
 		if err != nil {
 			return err
 		}
 		defer response.Body.Close()
 
-		if _, dError = download(tmp, response.Body, artifact, progress, serverCert, retryCount, retryInterval, done); dError != nil {
+		if _, dError = download(tmp, response.Body, artifact, progress, serverCert, remainingRetries, retryInterval, done); dError != nil {
 			return dError
 		}
 	}
@@ -99,9 +99,9 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, ser
 }
 
 func resume(to string, offset int64, artifact *Artifact, progress progressBytes, serverCert string, retryCount int,
-	retryInterval int, done chan struct{}) (int64, error) {
+	retryInterval time.Duration, done chan struct{}) (int64, error) {
 	// Send the HTTP request and get its response.
-	response, err := getDownloadResponse(artifact.Link, offset, serverCert, &retryCount, retryInterval)
+	response, remainingRetries, err := robustDownload(artifact.Link, offset, serverCert, retryCount, retryInterval)
 	if err != nil {
 		return 0, err
 	}
@@ -114,7 +114,7 @@ func resume(to string, offset int64, artifact *Artifact, progress progressBytes,
 			logger.Errorf("error removing partially downloaded file %s", to)
 			return 0, err
 		}
-		return download(to, response.Body, artifact, progress, serverCert, retryCount, retryInterval, done)
+		return download(to, response.Body, artifact, progress, serverCert, remainingRetries, retryInterval, done)
 	}
 
 	// Download the rest of the file.
@@ -128,11 +128,11 @@ func resume(to string, offset int64, artifact *Artifact, progress progressBytes,
 	if progress != nil {
 		progress(offset)
 	}
-	return downloadFile(file, response.Body, to, offset, artifact, progress, serverCert, retryCount, retryInterval, done)
+	return downloadFile(file, response.Body, to, offset, artifact, progress, serverCert, remainingRetries, retryInterval, done)
 }
 
 func downloadFile(file *os.File, input io.ReadCloser, to string, offset int64, artifact *Artifact,
-	progress progressBytes, serverCert string, retryCount int, retryInterval int, done chan struct{}) (int64, error) {
+	progress progressBytes, serverCert string, retryCount int, retryInterval time.Duration, done chan struct{}) (int64, error) {
 	w, err := copy(file, input, int64(artifact.Size)-offset, progress, done)
 	if err == nil {
 		err = validate(to, artifact.HashType, artifact.HashValue)
@@ -149,9 +149,9 @@ func downloadFile(file *os.File, input io.ReadCloser, to string, offset int64, a
 	for retryCount >= 0 {
 		var deltaBytes int64
 		logger.Errorf("error copying artifact %s, remaining attempts - %d, cause: %v", file.Name(), retryCount, err)
-		logger.Infof("%d seconds timeout until next attempt", retryInterval)
+		logger.Infof("%v timeout until next attempt", retryInterval)
 		file.Close()
-		time.Sleep(time.Duration(retryInterval) * time.Second)
+		time.Sleep(time.Duration(retryInterval))
 		logger.Infof("retrying to download artifact %s, current bytes written - %d", file.Name(), offset)
 		deltaBytes, err = resume(to, offset, artifact, progress, serverCert, 0, 0, done)
 		if err == nil {
@@ -163,26 +163,28 @@ func downloadFile(file *os.File, input io.ReadCloser, to string, offset int64, a
 	return w, err
 }
 
-func getDownloadResponse(link string, offset int64, serverCert string, retryCount *int, retryInterval int) (*http.Response, error) {
+func robustDownload(link string, offset int64, serverCert string, retryCount int, retryInterval time.Duration) (*http.Response, int, error) {
 	var err error
 	var resp *http.Response
-	for *retryCount >= 0 {
-		resp, err = checkDownloadResponse(link, offset, serverCert)
+	for retryCount >= 0 {
+		resp, err = attemptDownload(link, offset, serverCert)
 		if err == nil {
 			logger.Debugf("download response for artifact %s - %v", link, resp)
-			return resp, nil
+			return resp, retryCount, nil
 		}
-		*retryCount--
-		if *retryCount > 0 {
-			logger.Errorf("error downloading artifact %s, remaining attempts - %d, cause: %v", link, *retryCount, err)
-			logger.Infof("%d seconds timeout until next attempt", retryInterval)
-			time.Sleep(time.Duration(retryInterval) * time.Second)
+		retryCount--
+		if retryCount > 0 {
+			logger.Errorf("error downloading artifact %s, remaining attempts - %d, cause: %v", link, retryCount, err)
+			logger.Infof("%v timeout until next attempt", retryInterval)
+			if retryInterval > 0 {
+				time.Sleep(retryInterval)
+			}
 		}
 	}
-	return nil, err
+	return nil, 0, err
 }
 
-func checkDownloadResponse(link string, offset int64, serverCert string) (*http.Response, error) {
+func attemptDownload(link string, offset int64, serverCert string) (*http.Response, error) {
 	response, err := requestDownload(link, offset, serverCert)
 	if err != nil {
 		return nil, err
@@ -238,7 +240,7 @@ func requestDownload(link string, offset int64, serverCert string) (*http.Respon
 }
 
 func download(to string, in io.ReadCloser, artifact *Artifact, progress progressBytes,
-	serverCert string, retryCount int, retryInterval int, done chan struct{}) (int64, error) {
+	serverCert string, retryCount int, retryInterval time.Duration, done chan struct{}) (int64, error) {
 	file, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return 0, err

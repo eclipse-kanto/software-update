@@ -113,7 +113,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 	expectedInstall := "TestInstall"
 	expectedServerCert := "TestCert"
 	expectedDownloadRetryCount := 3
-	expectedDownloadRetryInterval := 5
+	expectedDownloadRetryInterval := "5s"
 	expectedLogFile := ""
 	expectedLogFileCount := 4
 	expectedLogFileMaxAge := 13
@@ -132,7 +132,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 		c(flagInstall, expectedInstall),
 		c(flagCert, expectedServerCert),
 		c(flagRetryCount, strconv.Itoa(expectedDownloadRetryCount)),
-		c(flagRetryCount, strconv.Itoa(expectedDownloadRetryInterval)),
+		c(flagRetryInterval, expectedDownloadRetryInterval),
 		c(flagLogFile, expectedLogFile),
 		c(flagLogFileCount, strconv.Itoa(expectedLogFileCount)),
 		c(flagLogFileMaxAge, strconv.Itoa(expectedLogFileMaxAge)),
