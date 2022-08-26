@@ -88,8 +88,8 @@ func (f *ScriptBasedSoftwareUpdatable) load() {
 			if updatable.Operation == "install" {
 				return f.installModules(dir, updatable, f.su)
 			}
-			// Add downlaod operation to the queue.
-			if updatable.Operation == "downlaod" {
+			// Add download operation to the queue.
+			if updatable.Operation == "download" {
 				return f.downloadModules(dir, updatable, f.su)
 			}
 			return false

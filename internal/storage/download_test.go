@@ -164,7 +164,7 @@ func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T
 			defer srv.Close()
 			name := filepath.Join(dir, art.FileName)
 
-			// 1. Resume downlaod of corrupted temporary file.
+			// 1. Resume download of corrupted temporary file.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "wrong start")
 			if err := downloadArtifact(name, art, nil, certFile, 0, 0, make(chan struct{})); err == nil {
 				t.Fatal("downlaod of corrupted temporary file must fail")
