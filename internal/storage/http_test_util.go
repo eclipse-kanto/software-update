@@ -41,6 +41,10 @@ var (
 	testOnceRange sync.Once
 	// testOnceSimple is used to add HTTP alias only once for the simple server.
 	testOnceSimple sync.Once
+
+	failCountBadStatus int
+	failCopyError      bool
+	corruptFileError   bool
 )
 
 var (
@@ -119,6 +123,11 @@ func (w *TestHTTPServer) Close() {
 
 // handlerRange handles incoming HTTP requests with range header support.
 func (w *TestHTTPServer) handlerRange(writer http.ResponseWriter, request *http.Request) {
+	if failCountBadStatus > 0 {
+		failCountBadStatus--
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	// Set default headers for txt file.
 	writer.Header().Set("Content-Type", "text/plain")
 	writer.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, w.name))
@@ -128,7 +137,11 @@ func (w *TestHTTPServer) handlerRange(writer http.ResponseWriter, request *http.
 	r := request.Header.Get("range")
 	if r == "" { // No range is defined
 		writer.Header().Set("Content-Length", strconv.Itoa(int(w.size)))
-		write(writer, w.size)
+		if failCopyError {
+			write(writer, w.size/3)
+		} else {
+			write(writer, w.size)
+		}
 		return
 	}
 
@@ -165,7 +178,11 @@ func (w *TestHTTPServer) handlerRange(writer http.ResponseWriter, request *http.
 	writer.WriteHeader(http.StatusPartialContent)
 
 	// Send the (end-begin) amount of bytes to the client
-	write(writer, end-begin+1)
+	if failCopyError {
+		write(writer, (end-begin+1)/3)
+	} else {
+		write(writer, end-begin+1)
+	}
 }
 
 // handlerSimple handles incoming HTTP requests without range header support.
@@ -179,6 +196,9 @@ func (w *TestHTTPServer) handlerSimple(writer http.ResponseWriter, request *http
 // write file content.
 func write(writer http.ResponseWriter, size int64) {
 	b := []byte("11111111111111111111111111111111111111111111111111")
+	if corruptFileError {
+		b[0] = '0'
+	}
 	s := int64(len(b))
 	for i := s; i < size; i += s {
 		writer.Write(b)

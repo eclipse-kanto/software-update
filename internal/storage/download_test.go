@@ -19,7 +19,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sync"
 	"testing"
+	"time"
 )
 
 const (
@@ -32,7 +34,9 @@ const (
 	sslCertFileEnv = "SSL_CERT_FILE"
 )
 
-var sslCertFile string
+var (
+	sslCertFile string
+)
 
 func isCertAddedToSystemPool(t *testing.T, certFile string) bool {
 	t.Helper()
@@ -280,6 +284,109 @@ func TestDownloadToFileError(t *testing.T) {
 		t.Fatal("validate with file bigger than expected")
 	}
 
+}
+
+// TestRobustDownloadRetryBadStatus tests file download with retry strategy, when a bad response status is returned
+func TestRobustDownloadRetryBadStatus(t *testing.T) {
+	dir := "_tmp-download"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("failed create temporary directory: %v", err)
+	}
+	// Remove temporary directory at the end
+	defer os.RemoveAll(dir)
+
+	art := &Artifact{
+		FileName: "test.txt", Size: 65536, Link: "http://localhost:43234/test.txt",
+		HashType:  "MD5",
+		HashValue: "ab2ce340d36bbaafe17965a3a2c6ed5b",
+	}
+	// Start Web server
+	srv := Host(":43234", art.FileName, int64(art.Size), false, false, "", "", t)
+	defer srv.Close()
+
+	name := filepath.Join(dir, art.FileName)
+
+	failCountBadStatus = 3
+	if err := downloadArtifact(name, art, nil, "", 1, 0, make(chan struct{})); err == nil {
+		t.Fatal("error expected when downloading artifact, due to bad response status")
+	}
+
+	if err := downloadArtifact(name, art, nil, "", 5, time.Second, make(chan struct{})); err != nil {
+		t.Fatal("expected to handle download error, by using retry download strategy")
+	}
+	check(name, art.Size, t)
+
+	if err := os.Remove(name); err != nil {
+		t.Fatalf("failed to delete test file %s", name)
+	}
+	failCountBadStatus = 2
+	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
+		t.Fatal("error expected when downloading artifact, due to bad response status")
+	}
+}
+
+func TestRobustDownloadRetryCopyError(t *testing.T) {
+	testCopyError(false, false, t)
+	testCopyError(false, true, t)
+	testCopyError(true, false, t)
+	testCopyError(true, true, t)
+}
+
+func testCopyError(failScenario bool, validationError bool, t *testing.T) {
+	dir := "_tmp-download"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("failed create temporary directory: %v", err)
+	}
+	// Remove temporary directory at the end
+	defer os.RemoveAll(dir)
+
+	art := &Artifact{
+		FileName: "test.txt", Size: 65536, Link: "http://localhost:43234/test.txt",
+		HashType:  "MD5",
+		HashValue: "ab2ce340d36bbaafe17965a3a2c6ed5b",
+	}
+	var serverClosing sync.WaitGroup
+	var serverClosed sync.WaitGroup
+	// Start Web server
+	serverClosing.Add(1)
+	serverClosed.Add(1)
+	defer serverClosed.Wait()
+	defer serverClosing.Done()
+	go func() {
+		if validationError {
+			corruptFileError = true
+		} else {
+			failCopyError = true
+		}
+		for i := 0; i < 5; i++ {
+			srv := Host(":43234", art.FileName, int64(art.Size), false, false, "", "", t)
+			time.Sleep(2 * time.Second)
+			srv.Close()
+		}
+		failCopyError = false
+		corruptFileError = false
+		srv := Host(":43234", art.FileName, int64(art.Size), false, false, "", "", t)
+		serverClosing.Wait()
+		srv.Close()
+		serverClosed.Done()
+	}()
+
+	name := filepath.Join(dir, art.FileName)
+	retryCount := 10
+	if failScenario {
+		retryCount = 2
+	}
+	err := downloadArtifact(name, art, nil, "", retryCount, 2*time.Second, make(chan struct{}))
+	if failScenario {
+		if err == nil {
+			t.Fatal("error expected when downloading artifact, due to copy error")
+		}
+	} else {
+		if err != nil {
+			t.Fatal("expected to handle download error, by using retry download strategy")
+		}
+		check(name, art.Size, t)
+	}
 }
 
 // TestDownloadToFileSecureError tests HTTPS file download function for bad/expired TLS certificates.

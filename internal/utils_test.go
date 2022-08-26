@@ -39,6 +39,11 @@ type testConfig struct {
 	featureID       string
 }
 
+var (
+	supConfig *ScriptBasedSoftwareUpdatableConfig
+	edgeCfg   *edgeConfiguration
+)
+
 var testVersion = "TestVersion"
 
 func assertPath(t *testing.T, name string, create bool) string {
@@ -80,12 +85,12 @@ func mockScriptBasedSoftwareUpdatable(t *testing.T, tc *testConfig) (*ScriptBase
 	}
 
 	// Initialize mocked ScriptBasedSoftwareUpdatable
-	supConfig := &ScriptBasedSoftwareUpdatableConfig{
+	supConfig = &ScriptBasedSoftwareUpdatableConfig{
 		Broker:     getDefaultFlagValue(t, flagBroker),
 		FeatureID:  tc.featureID,
 		ModuleType: getDefaultFlagValue(t, flagModuleType),
 	}
-	edgeCfg := &edgeConfiguration{
+	edgeCfg = &edgeConfiguration{
 		DeviceID: model.NewNamespacedID(testTopicNamespace, testTopicEntryID).String(),
 		TenantID: testTenantID,
 	}
@@ -135,18 +140,16 @@ type mockedClient struct {
 	connected bool
 }
 
-// lastOperation returns the lastOperation value from last payload or waits 5sec for new payload.
-func (client *mockedClient) lastOperation(t *testing.T) map[string]interface{} {
+func (client *mockedClient) pullLastOperationStatus() map[string]interface{} {
 	select {
 	case payload := <-client.payload:
 		// Get value map.
 		if lo, ok := payload.(map[string]interface{}); ok {
 			return lo
 		}
-		t.Fatalf("unexpected lastOperation format: %v", payload)
 	case <-time.After(10 * time.Second):
 		// Fail after the timeout.
-		t.Fatal("failed to retrieve lastOperation value")
+		return nil
 	}
 	return nil
 }
