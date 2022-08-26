@@ -62,8 +62,8 @@ type cfg struct {
 	ArtifactType          string       `json:"artifactType" def:"archive" descr:"Defines the module artifact type: archive or plane"`
 	Install               []string     `json:"install" descr:"Defines the absolute path to install script"`
 	ServerCert            string       `json:"serverCert" descr:"A PEM encoded certificate \"file\" for secure artifact download"`
-	DownloadRetryCount    int          `json:"downloadRetryCount" def:"0" descr:"The number of retries, in case of a failed download.\n By default no retries are supported."`
-	DownloadRetryInterval durationTime `json:"downloadRetryInterval" def:"5s" descr:"The interval between retries, in case of a failed download.\n Should be a sequence of decimal numbers, each with optional fraction and a unit suffix, such as '300ms', '1.5h', '10m30s', etc. Valid time units are 'ns', 'us' (or 'µs'), 'ms', 's', 'm', 'h'."`
+	DownloadRetryCount    int          `json:"downloadRetryCount" def:"0" descr:"Number of retries, in case of a failed download.\n By default no retries are supported."`
+	DownloadRetryInterval durationTime `json:"downloadRetryInterval" def:"5s" descr:"Interval between retries, in case of a failed download.\n Should be a sequence of decimal numbers, each with optional fraction and a unit suffix, such as '300ms', '1.5h', '10m30s', etc. Valid time units are 'ns', 'us' (or 'µs'), 'ms', 's', 'm', 'h'."`
 	LogFile               string       `json:"logFile" def:"log/software-update.log" descr:"Log file location in storage directory"`
 	LogLevel              string       `json:"logLevel" def:"INFO" descr:"Log levels are ERROR, WARN, INFO, DEBUG, TRACE"`
 	LogFileSize           int          `json:"logFileSize" def:"2" descr:"Log file size in MB before it gets rotated"`
