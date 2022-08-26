@@ -34,6 +34,11 @@ func main() {
 	loggerOut := logger.SetupLogger(logConfig)
 	defer loggerOut.Close()
 
+	if err := suConfig.Validate(); err != nil {
+		logger.Errorf("failed to validate script-based software updatable configuration: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Create new Script-Based software updatable
 	edgeCtr, err := feature.InitScriptBasedSU(suConfig)
 	if err != nil {
