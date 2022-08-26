@@ -27,9 +27,9 @@ func TestLogLevelError(t *testing.T) {
 	validate("ERROR", true, false, false, false, false, t)
 }
 
-// TestLogLevelWarning tests logger functions with log level set to WARNING.
-func TestLogLevelWarning(t *testing.T) {
-	validate("WARNING", true, true, false, false, false, t)
+// TestLogLevelWarn tests logger functions with log level set to WARN.
+func TestLogLevelWarn(t *testing.T) {
+	validate("WARN", true, true, false, false, false, t)
 }
 
 // TestLogLevelInfo tests logger functions with log level set to INFO.
@@ -73,7 +73,7 @@ func TestNopWriter(t *testing.T) {
 	}
 }
 
-func validate(lvl string, hasError bool, hasWarning bool, hasInfo bool, hasDebug bool, hasTrace bool, t *testing.T) {
+func validate(lvl string, hasError bool, hasWarn bool, hasInfo bool, hasDebug bool, hasTrace bool, t *testing.T) {
 	// Prepare
 	dir := "_tmp-logger"
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -90,9 +90,9 @@ func validate(lvl string, hasError bool, hasWarning bool, hasInfo bool, hasDebug
 	validateError(log, hasError, t)
 	validateHawkbitWrapper(log, hawkbit.ERROR, ePrefix, hasError, t)
 
-	// 2. Validate for warning logs.
-	validateWarning(log, hasWarning, t)
-	validateHawkbitWrapper(log, hawkbit.WARN, wPrefix, hasWarning, t)
+	// 2. Validate for warn logs.
+	validateWarn(log, hasWarn, t)
+	validateHawkbitWrapper(log, hawkbit.WARN, wPrefix, hasWarn, t)
 
 	// 3. Validate for info logs.
 	validateInfo(log, hasInfo, t)
@@ -112,12 +112,12 @@ func validateHawkbitWrapper(log string, logger hawkbit.Logger, prefix string, ha
 	// 1. Validate for Println function.
 	logger.Println(prefix + " hawkbit")
 	if has != search(log, t, hawkbitPrefix, prefix, prefix+" hawkbit") {
-		t.Errorf("[%s][Prefix: %s] Println entry mishmash [result: %v]", log, prefix, !has)
+		t.Errorf("[%s][Prefix: %s] Println entry mismatch [result: %v]", log, prefix, !has)
 	}
 	// 2. Validate for Printf function.
 	logger.Printf("%s hawkbit [%v,%s]", prefix, "param1", "param2")
 	if has != search(log, t, hawkbitPrefix, prefix, prefix+" hawkbit [param1,param2]") {
-		t.Errorf("[%s][Prefix: %s] Printf entry mishmash: [result: %v]", log, prefix, !has)
+		t.Errorf("[%s][Prefix: %s] Printf entry mismatch: [result: %v]", log, prefix, !has)
 	}
 }
 
@@ -126,26 +126,26 @@ func validateError(log string, has bool, t *testing.T) {
 	// 1. Validate for Error function.
 	Error("error log")
 	if has != search(log, t, suPrefix, ePrefix, "error log") {
-		t.Errorf("error entry mishmash [result: %v]", !has)
+		t.Errorf("error entry mismatch [result: %v]", !has)
 	}
 	// 2. Validate for Errorf function.
 	Errorf("error log [%v,%s]", "param1", "param2")
 	if has != search(log, t, suPrefix, ePrefix, "error log [param1,param2]") {
-		t.Errorf("errorf entry mishmash: [result: %v]", !has)
+		t.Errorf("errorf entry mismatch: [result: %v]", !has)
 	}
 }
 
-// validateError validates for warning logs.
-func validateWarning(log string, has bool, t *testing.T) {
-	// 1. Validate for Warning function.
-	Warning("warning log")
-	if has != search(log, t, suPrefix, wPrefix, "warning log") {
-		t.Errorf("warning entry mishmash [result: %v]", !has)
+// validateWarn validates for warn logs.
+func validateWarn(log string, has bool, t *testing.T) {
+	// 1. Validate for Warn function.
+	Warn("warn log")
+	if has != search(log, t, suPrefix, wPrefix, "warn log") {
+		t.Errorf("warn entry mismatch [result: %v]", !has)
 	}
-	// 2. Validate for Warningf function.
-	Warningf("warning log [%v,%s]", "param1", "param2")
-	if has != search(log, t, suPrefix, wPrefix, "warning log [param1,param2]") {
-		t.Errorf("warningf entry mishmash: [result: %v]", !has)
+	// 2. Validate for Warnf function.
+	Warnf("warn log [%v,%s]", "param1", "param2")
+	if has != search(log, t, suPrefix, wPrefix, "warn log [param1,param2]") {
+		t.Errorf("warnf entry mismatch: [result: %v]", !has)
 	}
 }
 
@@ -154,12 +154,12 @@ func validateInfo(log string, has bool, t *testing.T) {
 	// 1. Validate for Info function.
 	Info("info log")
 	if has != search(log, t, suPrefix, iPrefix, "info log") {
-		t.Errorf("info entry mishmash [result: %v]", !has)
+		t.Errorf("info entry mismatch [result: %v]", !has)
 	}
 	// 2. Validate for Infof function.
 	Infof("info log [%v,%s]", "param1", "param2")
 	if has != search(log, t, suPrefix, iPrefix, "info log [param1,param2]") {
-		t.Errorf("infof entry mishmash: [result: %v]", !has)
+		t.Errorf("infof entry mismatch: [result: %v]", !has)
 	}
 }
 
@@ -168,12 +168,12 @@ func validateDebug(log string, has bool, t *testing.T) {
 	// 1. Validate for Debug function.
 	Debug("debug log")
 	if has != search(log, t, suPrefix, dPrefix, "debug log") {
-		t.Errorf("debug entry mishmash [result: %v]", !has)
+		t.Errorf("debug entry mismatch [result: %v]", !has)
 	}
 	// 2. Validate for Debugf function.
 	Debugf("debug log [%v,%s]", "param1", "param2")
 	if has != search(log, t, suPrefix, dPrefix, "debug log [param1,param2]") {
-		t.Errorf("debugf entry mishmash: [result: %v]", !has)
+		t.Errorf("debugf entry mismatch: [result: %v]", !has)
 	}
 }
 
@@ -182,12 +182,12 @@ func validateTrace(log string, has bool, t *testing.T) {
 	// 1. Validate for Trace function.
 	Trace("trace log")
 	if has != search(log, t, suPrefix, tPrefix, "trace log") {
-		t.Errorf("trace entry mishmash [result: %v]", !has)
+		t.Errorf("trace entry mismatch [result: %v]", !has)
 	}
 	// 2. Validate for Tracef function.
 	Tracef("trace log [%v,%s]", "param1", "param2")
 	if has != search(log, t, suPrefix, tPrefix, "trace log [param1,param2]") {
-		t.Errorf("tracef entry mishmash: [result: %v]", !has)
+		t.Errorf("tracef entry mismatch: [result: %v]", !has)
 	}
 }
 

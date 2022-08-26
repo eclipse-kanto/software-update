@@ -15,6 +15,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -110,6 +111,9 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 	expectedArtifact := "TestArchive"
 	expectedFeatureID := "TestFeature"
 	expectedInstall := "TestInstall"
+	expectedServerCert := "TestCert"
+	expectedDownloadRetryCount := 3
+	expectedDownloadRetryInterval := "5s"
 	expectedLogFile := ""
 	expectedLogFileCount := 4
 	expectedLogFileMaxAge := 13
@@ -126,6 +130,9 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 		c(flagArtifactType, expectedArtifact),
 		c(flagFeatureID, expectedFeatureID),
 		c(flagInstall, expectedInstall),
+		c(flagCert, expectedServerCert),
+		c(flagRetryCount, strconv.Itoa(expectedDownloadRetryCount)),
+		c(flagRetryInterval, expectedDownloadRetryInterval),
 		c(flagLogFile, expectedLogFile),
 		c(flagLogFileCount, strconv.Itoa(expectedLogFileCount)),
 		c(flagLogFileMaxAge, strconv.Itoa(expectedLogFileMaxAge)),
@@ -147,6 +154,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 		Broker:          expectedFlagBroker,
 		Username:        expectedUsername,
 		Password:        expectedPassword,
+		ServerCert:      expectedServerCert,
 		StorageLocation: expectedStorageLocation,
 		FeatureID:       expectedFeatureID,
 		ModuleType:      expectedModuleType,
@@ -268,20 +276,20 @@ func TestInitFlagsWithConfigMixedContent(t *testing.T) {
 
 	expectedConfig := &ScriptBasedSoftwareUpdatableConfig{
 		Broker:          "tcp://host:12345",
-		FeatureID:       defaultFeatureID,
-		ArtifactType:    defaultArtifactType,
-		ModuleType:      defaultModuleType,
-		StorageLocation: defaultStorageLocation,
+		FeatureID:       getDefaultFlagValue(t, flagFeatureID),
+		ArtifactType:    getDefaultFlagValue(t, flagArtifactType),
+		ModuleType:      getDefaultFlagValue(t, flagModuleType),
+		StorageLocation: getDefaultFlagValue(t, flagStorageLocation),
 		Username:        "test",
-		Password:        defaultPassword,
+		Password:        "",
 	}
 
 	expectedLogConfig := &logger.LogConfig{
 		LogFile:       "test_log.txt",
 		LogLevel:      "TRACE",
-		LogFileSize:   defaultLogFileSize,
-		LogFileCount:  defaultLogFileCount,
-		LogFileMaxAge: defaultLogFileMaxAge,
+		LogFileSize:   getDefaultFlagValueInt(t, flagLogFileSize),
+		LogFileCount:  getDefaultFlagValueInt(t, flagLogFileCount),
+		LogFileMaxAge: getDefaultFlagValueInt(t, flagLogFileMaxAge),
 	}
 
 	compareConfigResult(t, expectedConfig, expectedLogConfig)
@@ -371,4 +379,33 @@ func resetArgs() {
 		// reset the flags before each test to avoid flag redefined panic
 		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	}()
+}
+
+func getDefaultFlagValue(t *testing.T, flagName string) string {
+	flagName = toFieldName(flagName)
+	valueOf := reflect.ValueOf(cfg{})
+	typeOf := valueOf.Type()
+	fieldName := toFieldName(flagName)
+	fieldType, ok := typeOf.FieldByName(fieldName)
+	if ok {
+		return fieldType.Tag.Get("def")
+	}
+	t.Fatalf("unable to get field %s", fieldName)
+	return "" // unreachable
+}
+
+func getDefaultFlagValueInt(t *testing.T, flagName string) int {
+	valueOf := reflect.ValueOf(cfg{})
+	typeOf := valueOf.Type()
+	fieldName := toFieldName(flagName)
+	fieldType, ok := typeOf.FieldByName(fieldName)
+	if ok {
+		result, err := strconv.Atoi(fieldType.Tag.Get("def"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	t.Fatalf("unable to get field %s", fieldName)
+	return 0 // unreachable
 }

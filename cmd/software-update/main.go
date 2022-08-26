@@ -34,19 +34,18 @@ func main() {
 	loggerOut := logger.SetupLogger(logConfig)
 	defer loggerOut.Close()
 
+	if err := suConfig.Validate(); err != nil {
+		logger.Errorf("failed to validate script-based software updatable configuration: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Create new Script-Based software updatable
-	su, err := feature.NewScriptBasedSU(suConfig)
+	edgeCtr, err := feature.InitScriptBasedSU(suConfig)
 	if err != nil {
 		logger.Errorf("failed to create script-based software updatable: %v", err)
 		os.Exit(1)
 	}
-	su.Connect()
-
-	// Disconnect client on exit
-	defer func() {
-		su.Disconnect()
-		logger.Infof("Disconnected from MQTT broker: %s", suConfig.Broker)
-	}()
+	defer edgeCtr.Close() // not nil
 
 	chWaitCtrlC := make(chan os.Signal, 1)
 	signal.Notify(chWaitCtrlC, os.Interrupt)

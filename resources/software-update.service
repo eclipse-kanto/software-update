@@ -7,7 +7,7 @@ Requires=mosquitto.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/software-update -configFile /etc/software-update/config.json
+ExecStart=/usr/bin/software-update -configFile /etc/software-update/config.json
 Restart=always
 
 [Install]

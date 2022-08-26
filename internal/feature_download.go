@@ -123,7 +123,7 @@ Started:
 Downloading:
 	if opError = f.store.DownloadModule(toDir, module, func(percent int) {
 		setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading).WithProgress(percent))
-	}); opError != nil {
+	}, f.serverCert, f.downloadRetryCount, f.downloadRetryInterval); opError != nil {
 		opErrorMsg = errDownload
 		return opError == storage.ErrCancel
 	}

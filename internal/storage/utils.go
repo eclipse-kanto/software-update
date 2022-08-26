@@ -265,7 +265,7 @@ func searchAndMove(inDir string, toDir string, module *Module) {
 	}
 	paths, err := os.ReadDir(inDir)
 	if err != nil {
-		logger.Warningf("failed to get archived modules names: %v", err)
+		logger.Warnf("failed to get archived modules names: %v", err)
 		return
 	}
 

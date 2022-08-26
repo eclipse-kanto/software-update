@@ -18,11 +18,15 @@ import (
 	"testing"
 
 	"github.com/eclipse-kanto/software-update/hawkbit"
+	"github.com/eclipse-kanto/software-update/internal/storage"
 )
 
 const (
-	testDirFeature  = "_tmp-feature"
-	testDefaultHost = ":12345"
+	testDirFeature        = "_tmp-feature"
+	testDefaultHost       = ":12345"
+	testDefaultHostSecure = ":12346"
+	testCert              = "storage/testdata/valid_cert.pem"
+	testKey               = "storage/testdata/valid_key.pem"
 )
 
 // TestScriptBasedConstructor tests NewScriptBasedSU with wrong broker URL.
@@ -41,7 +45,10 @@ func TestScriptBasedConstructor(t *testing.T) {
 	}
 
 	// 1. Try to create new ScriptBasedSoftwareUpdatable with wrong broker URL.
-	if _, err := NewScriptBasedSU(cfg); err == nil {
+	if su, err := InitScriptBasedSU(cfg); err == nil {
+		if su != nil {
+			defer su.Close()
+		}
 		t.Fatalf("fail to validate with unknown broker host: %v", err)
 	}
 }
@@ -81,7 +88,7 @@ func TestScriptBasedInitLoadDependencies(t *testing.T) {
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable with error for loading install dependencies
 	_, _, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
-		clientConnected: true, storageLocation: dir, featureID: defaultFeatureID})
+		clientConnected: true, storageLocation: dir, featureID: getDefaultFlagValue(t, flagFeatureID)})
 	if err == nil {
 		t.Fatalf("expected to fail when mandatory field is missing in insalled dept file")
 	}
@@ -96,14 +103,14 @@ func TestScriptBasedInit(t *testing.T) {
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable with error for not connected client
 	_, _, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
-		clientConnected: false, storageLocation: dir, featureID: defaultFeatureID})
+		clientConnected: false, storageLocation: dir, featureID: getDefaultFlagValue(t, flagFeatureID)})
 	if err == nil {
-		t.Fatal("Ditto Client shall not be connected!")
+		t.Fatal("ditto Client shall not be connected!")
 	}
 
 }
 
-// TestSBSUInit tests ScriptBasedSoftwareUpdatable core functionality: init, install and download.
+// TestScriptBasedCore tests ScriptBasedSoftwareUpdatable core functionality: init, install and download.
 func TestScriptBasedCore(t *testing.T) {
 	// Prepare
 	dir := assertPath(t, testDirFeature, false)
@@ -111,23 +118,33 @@ func TestScriptBasedCore(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// Prepare/Close simple HTTP server used to host testing artifacts
-	w := host(testDefaultHost, t).addInstallScript()
-	defer w.close()
+	w := storage.Host(testDefaultHost, "", 0, true, false, "", "", t).AddInstallScript()
+	defer w.Close()
+
+	wSecure := storage.Host(testDefaultHostSecure, "", 0, true, true, testCert, testKey, t).AddInstallScript()
+	defer wSecure.Close()
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable.
 	feature, mc, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
-		clientConnected: true, featureID: defaultFeatureID, storageLocation: dir})
+		clientConnected: true, featureID: getDefaultFlagValue(t, flagFeatureID), storageLocation: dir})
 	if err != nil {
 		t.Fatalf("failed to initialize ScriptBasedSoftwareUpdatable: %v", err)
 	}
-	defer feature.Disconnect()
+	defer feature.Disconnect(true)
 
+	testDownloadInstall(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), t)
+
+	feature.serverCert = testCert
+	testDownloadInstall(feature, mc, wSecure.GenerateSoftwareArtifacts(true, "install"), t)
+}
+
+func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifacts []*hawkbit.SoftwareArtifactAction, t *testing.T) {
 	// Preapare simple software update action.
 	sua := &hawkbit.SoftwareUpdateAction{
 		CorrelationID: "test-correlation-id",
 		SoftwareModules: []*hawkbit.SoftwareModuleAction{{
 			SoftwareModule: &hawkbit.SoftwareModuleID{Name: "test", Version: "1.0.0"},
-			Artifacts:      w.getSoftwareArtifacts("install"),
+			Artifacts:      artifacts,
 			Metadata:       map[string]string{"artifact-type": "plane"},
 		}},
 	}
