@@ -332,7 +332,7 @@ func TestRobustDownloadRetryCopyError(t *testing.T) {
 	testCopyError(true, true, t)
 }
 
-func testCopyError(failScenario bool, validationError bool, t *testing.T) {
+func testCopyError(withInsufficientRetryCount bool, withCorruptedFile bool, t *testing.T) {
 	dir := "_tmp-download"
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("failed create temporary directory: %v", err)
@@ -353,7 +353,7 @@ func testCopyError(failScenario bool, validationError bool, t *testing.T) {
 	defer serverClosed.Wait()
 	defer serverClosing.Done()
 	go func() {
-		if validationError {
+		if withCorruptedFile {
 			corruptFileError = true
 		} else {
 			failCopyError = true
@@ -373,11 +373,11 @@ func testCopyError(failScenario bool, validationError bool, t *testing.T) {
 
 	name := filepath.Join(dir, art.FileName)
 	retryCount := 10
-	if failScenario {
+	if withInsufficientRetryCount {
 		retryCount = 2
 	}
 	err := downloadArtifact(name, art, nil, "", retryCount, 2*time.Second, make(chan struct{}))
-	if failScenario {
+	if withInsufficientRetryCount {
 		if err == nil {
 			t.Fatal("error expected when downloading artifact, due to copy error")
 		}

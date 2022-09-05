@@ -28,6 +28,9 @@ const (
 	testDefaultHostSecure = ":12346"
 	testCert              = "storage/testdata/valid_cert.pem"
 	testKey               = "storage/testdata/valid_key.pem"
+
+	noProgress = -12345
+	noMessage  = "no message"
 )
 
 // TestScriptBasedConstructor tests NewScriptBasedSU with wrong broker URL.
@@ -116,12 +119,12 @@ func TestScriptBasedDownloadAndInstall(t *testing.T) {
 	testScriptBasedSoftwareUpdatableOperations(true, t)
 }
 
-// TestScriptBasedDownloadAndInstallResume tests ScriptBasedSoftwareUpdatable core functionality: init, resuming install and download operations.
+// TestScriptBasedDownloadAndInstallResume tests ScriptBasedSoftwareUpdatable core functionality with operation resume
 func TestScriptBasedDownloadAndInstallResume(t *testing.T) {
 	testScriptBasedSoftwareUpdatableOperations(false, t)
 }
 
-func testScriptBasedSoftwareUpdatableOperations(basic bool, t *testing.T) {
+func testScriptBasedSoftwareUpdatableOperations(noResume bool, t *testing.T) {
 	// Prepare
 	dir := assertPath(t, testDirFeature, false)
 	// Remove temporary directory at the end.
@@ -142,7 +145,7 @@ func testScriptBasedSoftwareUpdatableOperations(basic bool, t *testing.T) {
 	}
 	defer feature.Disconnect(true)
 
-	if basic {
+	if noResume {
 		testDownloadInstall(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), t)
 		feature.serverCert = testCert
 		testDownloadInstall(feature, mc, wSecure.GenerateSoftwareArtifacts(true, "install"), t)
@@ -157,25 +160,29 @@ func testResume(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifac
 	testReconnectWhileRunningOperation(feature, mc, sua, true, t)  // disconnect while downloading or installing
 }
 
-func testReconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, sua *hawkbit.SoftwareUpdateAction, install bool, t *testing.T) {
+func testReconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient,
+	sua *hawkbit.SoftwareUpdateAction, install bool, t *testing.T) {
 	var waitDisconnect sync.WaitGroup
 	waitDisconnect.Add(1)
-	go func() {
-		if install {
-			feature.installHandler(sua, feature.su)
-		} else {
-			feature.downloadHandler(sua, feature.su)
-		}
+	if install {
+		feature.installHandler(sua, feature.su)
+	} else {
+		feature.downloadHandler(sua, feature.su)
+	}
+	firstIterationEventCount, secondIterationEventCount := 2, 3
+	if install {
+		firstIterationEventCount = 5
+	}
+	statuses := pullStatusChanges(mc, firstIterationEventCount) // should go between DOWNLOADING/INSTALLING and next state
+
+	go func() { // blocks until done
 		feature.Disconnect(false)
 		waitDisconnect.Done()
 	}()
 
-	statuses := pullStatusChanges(mc)
+	statuses = append(statuses, pullStatusChanges(mc, secondIterationEventCount)...)
 	waitDisconnect.Wait()
-
-	// reconnecting
-	feature.Connect(mc, supConfig, edgeCfg)
-	statuses = append(statuses, pullStatusChanges(mc)...)
+	defer feature.Connect(mc, supConfig, edgeCfg)
 	if install {
 		checkInstallStatusEvents(statuses, t)
 	} else {
@@ -183,18 +190,14 @@ func testReconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, m
 	}
 }
 
-func pullStatusChanges(mc *mockedClient) []interface{} {
+func pullStatusChanges(mc *mockedClient, expectedCount int) []interface{} {
 	var statuses []interface{}
-	for i := 0; i < 50; i++ {
+	for i := 0; i < expectedCount; i++ {
 		lo := mc.pullLastOperationStatus()
-		val, ok := lo["status"]
-		if !ok {
+		if _, ok := lo["status"]; !ok {
 			break
 		}
 		statuses = append(statuses, lo)
-		if val == string(hawkbit.StatusFinishedSuccess) {
-			break
-		}
 	}
 	return statuses
 }
@@ -205,13 +208,13 @@ func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient
 	// Try to execute a simple download operation.
 	feature.downloadHandler(sua, feature.su)
 
-	statuses := pullStatusChanges(mc)
+	statuses := pullStatusChanges(mc, 5)
 	checkDownloadStatusEvents(statuses, t)
 
 	// Try to execute a simple install operation.
 	feature.installHandler(sua, feature.su)
 
-	statuses = pullStatusChanges(mc)
+	statuses = pullStatusChanges(mc, 8)
 	checkInstallStatusEvents(statuses, t)
 }
 
@@ -221,10 +224,10 @@ func checkDownloadStatusEvents(statuses []interface{}, t *testing.T) {
 		string(hawkbit.StatusDownloaded), string(hawkbit.StatusFinishedSuccess),
 	}
 	progressSeq := []float64{
-		0, 0, 100.0, 100.0, 0,
+		noProgress, noProgress, 100.0, 100.0, noProgress,
 	}
 	messageSeq := []string{
-		"", "", "", "", "",
+		noMessage, noMessage, noMessage, noMessage, noMessage,
 	}
 	checkStatusEvents(statusSeq, progressSeq, messageSeq, statuses, t)
 }
@@ -236,10 +239,10 @@ func checkInstallStatusEvents(statuses []interface{}, t *testing.T) {
 		string(hawkbit.StatusInstalled), string(hawkbit.StatusFinishedSuccess),
 	}
 	progressSeq := []float64{
-		0, 0, 100.0, 100.0, 0, 0, 0, 0,
+		noProgress, noProgress, 100.0, 100.0, noProgress, noProgress, noProgress, noProgress,
 	}
 	messageSeq := []string{
-		"", "", "", "", "", "", "", "My final message!",
+		noMessage, noMessage, noMessage, noMessage, noMessage, "My final message!", "My final message!", "My final message!",
 	}
 	checkStatusEvents(statusSeq, progressSeq, messageSeq, statuses, t)
 }
@@ -253,12 +256,22 @@ func checkStatusEvents(statusSeq []string, progressSeq []float64, messageSeq []s
 		if el != lo["status"] {
 			t.Fatalf("received unexpected lastOperation status: %s != %s", lo["status"], el)
 		}
-		if progressSeq[i] > 0 && progressSeq[i] != lo["progress"] {
-			t.Fatalf("received unexpected lastOperation percent: %v != %v", lo["progress"], progressSeq[i])
+		checkStatusParameter("progress", progressSeq[i], progressSeq[i] == noProgress, lo, t)
+		checkStatusParameter("message", messageSeq[i], messageSeq[i] == noMessage, lo, t)
+	}
+}
+
+func checkStatusParameter(name string, expectedValue interface{}, noValue bool, lo map[string]interface{}, t *testing.T) {
+	receivedValue, ok := lo[name]
+	if ok {
+		if noValue {
+			t.Fatalf("no %s expected in payload: %v", name, lo)
 		}
-		if len(messageSeq[i]) > 0 && messageSeq[i] != lo["message"] {
-			t.Fatalf("received unexpected lastOperation message: %s != %s", lo["message"], messageSeq[i])
+		if expectedValue != receivedValue {
+			t.Fatalf("received unexpected lastOperation %s: %s != %s", name, receivedValue, expectedValue)
 		}
+	} else if !noValue {
+		t.Fatalf("no %s found in payload: %v", name, lo)
 	}
 }
 

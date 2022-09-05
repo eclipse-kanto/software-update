@@ -186,7 +186,7 @@ func (client *mockedClient) Publish(topic string, qos byte, retained bool, paylo
 	if env.Topic.Namespace != testTopicNamespace || env.Topic.EntityID != testTopicEntryID {
 		return token
 	}
-	// Valdiate its starting path.
+	// Validate its starting path.
 	if !strings.HasPrefix(env.Path, "/features/SoftwareUpdatable/properties/status/lastOperation") {
 		return token
 	}
