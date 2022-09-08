@@ -19,7 +19,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sync"
 	"testing"
+	"time"
 )
 
 const (
@@ -32,7 +34,9 @@ const (
 	sslCertFileEnv = "SSL_CERT_FILE"
 )
 
-var sslCertFile string
+var (
+	sslCertFile string
+)
 
 func isCertAddedToSystemPool(t *testing.T, certFile string) bool {
 	t.Helper()
@@ -160,14 +164,15 @@ func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T
 			defer os.RemoveAll(dir)
 
 			// Start http(s) server
-			srv := Host(":43234", art.FileName, int64(art.Size), false, isSecure(art.Link, t), validCert, validKey, t)
+			srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+			srv.Host(false, isSecure(art.Link, t), validCert, validKey)
 			defer srv.Close()
 			name := filepath.Join(dir, art.FileName)
 
 			// 1. Resume download of corrupted temporary file.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "wrong start")
 			if err := downloadArtifact(name, art, nil, certFile, 0, 0, make(chan struct{})); err == nil {
-				t.Fatal("downlaod of corrupted temporary file must fail")
+				t.Fatal("download of corrupted temporary file must fail")
 			}
 
 			// 2. Cancel in the middle of the download operation.
@@ -236,7 +241,8 @@ func TestDownloadToFileError(t *testing.T) {
 	}
 
 	// Start http(s) server
-	srv := Host(":43234", art.FileName, int64(art.Size), true, isSecure(art.Link, t), untrustedCert, untrustedKey, t)
+	srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+	srv.Host(true, isSecure(art.Link, t), untrustedCert, untrustedKey)
 	defer srv.Close()
 	name := filepath.Join(dir, art.FileName)
 
@@ -282,6 +288,112 @@ func TestDownloadToFileError(t *testing.T) {
 
 }
 
+// TestRobustDownloadRetryBadStatus tests file download with retry strategy, when a bad response status is returned
+func TestRobustDownloadRetryBadStatus(t *testing.T) {
+	dir := "_tmp-download"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("failed to create a temporary directory: %v", err)
+	}
+	// Remove temporary directory at the end
+	defer os.RemoveAll(dir)
+
+	art := &Artifact{
+		FileName: "test.txt", Size: 65536, Link: "http://localhost:43234/test.txt",
+		HashType:  "MD5",
+		HashValue: "ab2ce340d36bbaafe17965a3a2c6ed5b",
+	}
+	// Start Web server
+	srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+	setIncorrectBehavior(3, false, false)
+	srv.Host(false, false, "", "")
+	defer srv.Close()
+
+	name := filepath.Join(dir, art.FileName)
+
+	if err := downloadArtifact(name, art, nil, "", 1, 0, make(chan struct{})); err == nil {
+		t.Fatal("error is expected when downloading artifact, due to bad response status")
+	}
+
+	if err := downloadArtifact(name, art, nil, "", 5, time.Second, make(chan struct{})); err != nil {
+		t.Fatal("expected to handle download error, by using retry download strategy")
+	}
+	check(name, art.Size, t)
+
+	if err := os.Remove(name); err != nil {
+		t.Fatalf("failed to delete test file %s", name)
+	}
+	setIncorrectBehavior(2, false, false)
+	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
+		t.Fatal("error is expected when downloading artifact, due to bad response status")
+	}
+}
+
+func TestRobustDownloadRetryCopyError(t *testing.T) {
+	testCopyError(false, false, t)
+	testCopyError(false, true, t)
+	testCopyError(true, false, t)
+	testCopyError(true, true, t)
+}
+
+func testCopyError(withInsufficientRetryCount bool, withCorruptedFile bool, t *testing.T) {
+	dir := "_tmp-download"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("failed to create a temporary directory: %v", err)
+	}
+	// Remove temporary directory at the end
+	defer os.RemoveAll(dir)
+
+	art := &Artifact{
+		FileName: "test.txt", Size: 65536, Link: "http://localhost:43234/test.txt",
+		HashType:  "MD5",
+		HashValue: "ab2ce340d36bbaafe17965a3a2c6ed5b",
+	}
+	var serverClosing sync.WaitGroup
+	var serverClosed sync.WaitGroup
+	// Start Web server
+	serverClosing.Add(1)
+	serverClosed.Add(1)
+	defer serverClosed.Wait()
+	defer serverClosing.Done()
+	go func() {
+		for i := 0; i < 5; i++ {
+			srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+			if withCorruptedFile {
+				setIncorrectBehavior(0, false, true)
+			} else {
+				setIncorrectBehavior(0, true, false)
+			}
+			srv.Host(false, false, "", "")
+			time.Sleep(2 * time.Second)
+			srv.Close()
+		}
+		srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+		setIncorrectBehavior(0, false, false)
+		srv.Host(false, false, "", "")
+		setIncorrectBehavior(0, false, false)
+		serverClosing.Wait()
+		srv.Close()
+		serverClosed.Done()
+	}()
+
+	name := filepath.Join(dir, art.FileName)
+	retryCount := 10
+	if withInsufficientRetryCount {
+		retryCount = 2
+	}
+	err := downloadArtifact(name, art, nil, "", retryCount, 2*time.Second, make(chan struct{}))
+	if withInsufficientRetryCount {
+		if err == nil {
+			t.Fatal("error is expected when downloading artifact, due to copy error")
+		}
+	} else {
+		if err != nil {
+			t.Fatal("expected to handle download error, by using retry download strategy")
+		}
+		check(name, art.Size, t)
+	}
+}
+
 // TestDownloadToFileSecureError tests HTTPS file download function for bad/expired TLS certificates.
 func TestDownloadToFileSecureError(t *testing.T) {
 	// Prepare
@@ -300,11 +412,14 @@ func TestDownloadToFileSecureError(t *testing.T) {
 	}
 
 	// Start https servers
-	srvSecureInvalid := Host(":43234", art.FileName, int64(art.Size), true, true, expiredCert, expiredKey, t)
+	srvSecureInvalid := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+	srvSecureInvalid.Host(true, true, expiredCert, expiredKey)
 	defer srvSecureInvalid.Close()
-	srvSecureUntrusted := Host(":43235", art.FileName, int64(art.Size), true, true, untrustedCert, untrustedKey, t)
+	srvSecureUntrusted := NewTestHTTPServer(":43235", art.FileName, int64(art.Size), t)
+	srvSecureUntrusted.Host(true, true, untrustedCert, untrustedKey)
 	defer srvSecureUntrusted.Close()
-	srvSecureValid := Host(":43236", art.FileName, int64(art.Size), true, true, validCert, validKey, t)
+	srvSecureValid := NewTestHTTPServer(":43236", art.FileName, int64(art.Size), t)
+	srvSecureValid.Host(true, true, validCert, validKey)
 	defer srvSecureValid.Close()
 	name := filepath.Join(dir, art.FileName)
 

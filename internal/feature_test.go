@@ -15,6 +15,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/eclipse-kanto/software-update/hawkbit"
@@ -27,6 +28,13 @@ const (
 	testDefaultHostSecure = ":12346"
 	testCert              = "storage/testdata/valid_cert.pem"
 	testKey               = "storage/testdata/valid_key.pem"
+
+	noProgress = -12345
+	noMessage  = "no message"
+
+	statusParam   = "status"
+	progressParam = "progress"
+	messageParam  = "message"
 )
 
 // TestScriptBasedConstructor tests NewScriptBasedSU with wrong broker URL.
@@ -110,18 +118,31 @@ func TestScriptBasedInit(t *testing.T) {
 
 }
 
-// TestScriptBasedCore tests ScriptBasedSoftwareUpdatable core functionality: init, install and download.
-func TestScriptBasedCore(t *testing.T) {
+// TestScriptBasedDownloadAndInstall tests ScriptBasedSoftwareUpdatable core functionality: init, install and download operations.
+func TestScriptBasedDownloadAndInstall(t *testing.T) {
+	testScriptBasedSoftwareUpdatableOperations(true, t)
+}
+
+// TestScriptBasedDownloadAndInstallResume tests ScriptBasedSoftwareUpdatable core functionality with operation resume
+func TestScriptBasedDownloadAndInstallResume(t *testing.T) {
+	testScriptBasedSoftwareUpdatableOperations(false, t)
+}
+
+func testScriptBasedSoftwareUpdatableOperations(noResume bool, t *testing.T) {
 	// Prepare
 	dir := assertPath(t, testDirFeature, false)
 	// Remove temporary directory at the end.
 	defer os.RemoveAll(dir)
 
 	// Prepare/Close simple HTTP server used to host testing artifacts
-	w := storage.Host(testDefaultHost, "", 0, true, false, "", "", t).AddInstallScript()
+	w := storage.NewTestHTTPServer(testDefaultHost, "", 0, t)
+	w.Host(true, false, "", "")
+	w.AddInstallScript()
 	defer w.Close()
 
-	wSecure := storage.Host(testDefaultHostSecure, "", 0, true, true, testCert, testKey, t).AddInstallScript()
+	wSecure := storage.NewTestHTTPServer(testDefaultHostSecure, "", 0, t)
+	wSecure.Host(true, true, testCert, testKey)
+	wSecure.AddInstallScript()
 	defer wSecure.Close()
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable.
@@ -132,106 +153,153 @@ func TestScriptBasedCore(t *testing.T) {
 	}
 	defer feature.Disconnect(true)
 
-	testDownloadInstall(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), t)
+	if noResume {
+		testDownloadInstall(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), t)
+		feature.serverCert = testCert
+		testDownloadInstall(feature, mc, wSecure.GenerateSoftwareArtifacts(true, "install"), t)
+	} else {
+		testDisconnect(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), t)
+	}
+}
 
-	feature.serverCert = testCert
-	testDownloadInstall(feature, mc, wSecure.GenerateSoftwareArtifacts(true, "install"), t)
+func testDisconnect(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifacts []*hawkbit.SoftwareArtifactAction, t *testing.T) {
+	sua := prepareSoftwareUpdateAction(artifacts)
+	testDisconnectWhileRunningOperation(feature, mc, sua, false, t) // disconnect while downloading
+	testDisconnectWhileRunningOperation(feature, mc, sua, true, t)  // disconnect while installing
+}
+
+func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient,
+	sua *hawkbit.SoftwareUpdateAction, install bool, t *testing.T) {
+	var waitDisconnect sync.WaitGroup
+	waitDisconnect.Add(1)
+	if install {
+		feature.installHandler(sua, feature.su)
+	} else {
+		feature.downloadHandler(sua, feature.su)
+	}
+	preDisconnectEventCount := 2  // STARTED, DOWNLOADING
+	postDisconnectEventCount := 3 // DOWNLOADING(100)/INSTALLING(100), DOWNLOADED/INSTALLED, FINISHED_SUCCESS
+	if install {
+		preDisconnectEventCount = 5 // STARTED, DOWNLOADING, DOWNLOADING(100), DOWNLOADED, INSTALLING
+	}
+	statuses := pullStatusChanges(mc, preDisconnectEventCount) // should go between DOWNLOADING/INSTALLING and next state
+
+	go func() { // decrements count number with 1, when disconnected
+		feature.Disconnect(false)
+		waitDisconnect.Done()
+	}()
+
+	statuses = append(statuses, pullStatusChanges(mc, postDisconnectEventCount)...)
+	waitDisconnect.Wait()
+	defer feature.Connect(mc, supConfig, edgeCfg)
+	if install {
+		checkInstallStatusEvents(statuses, t)
+	} else {
+		checkDownloadStatusEvents(statuses, t)
+	}
+}
+
+func pullStatusChanges(mc *mockedClient, expectedCount int) []interface{} {
+	var statuses []interface{}
+	for i := 0; i < expectedCount; i++ {
+		lo := mc.pullLastOperationStatus()
+		statuses = append(statuses, lo)
+	}
+	return statuses
 }
 
 func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifacts []*hawkbit.SoftwareArtifactAction, t *testing.T) {
-	// Preapare simple software update action.
-	sua := &hawkbit.SoftwareUpdateAction{
+	sua := prepareSoftwareUpdateAction(artifacts)
+
+	// Try to execute a simple download operation.
+	feature.downloadHandler(sua, feature.su)
+
+	statuses := pullStatusChanges(mc, 5) // STARTED, DOWNLOADING, DOWNLOADING(100), DOWNLOADED, FINISHED_SUCCESS
+	checkDownloadStatusEvents(statuses, t)
+
+	// Try to execute a simple install operation.
+	feature.installHandler(sua, feature.su)
+
+	statuses = pullStatusChanges(mc, 8) // STARTED, DOWNLOADING, DOWNLOADING(100), DOWNLOADED,
+	// INSTALLING, INSTALLING(100), INSTALLED, FINISHED_SUCCESS
+	checkInstallStatusEvents(statuses, t)
+}
+
+func createStatus(status hawkbit.Status, progress float64, message string) map[string]interface{} {
+	return map[string]interface{}{
+		statusParam:   string(status),
+		progressParam: progress,
+		messageParam:  message,
+	}
+}
+
+func checkDownloadStatusEvents(actualStatuses []interface{}, t *testing.T) {
+	var expectedStatuses []interface{}
+	expectedStatuses = append(expectedStatuses,
+		createStatus(hawkbit.StatusStarted, noProgress, noMessage),
+		createStatus(hawkbit.StatusDownloading, noProgress, noMessage),
+		createStatus(hawkbit.StatusDownloading, 100.0, noMessage),
+		createStatus(hawkbit.StatusDownloaded, 100.0, noMessage),
+		createStatus(hawkbit.StatusFinishedSuccess, noProgress, noMessage),
+	)
+	checkStatusEvents(expectedStatuses, actualStatuses, t)
+}
+
+func checkInstallStatusEvents(actualStatuses []interface{}, t *testing.T) {
+	var expectedStatuses []interface{}
+	expectedStatuses = append(expectedStatuses,
+		createStatus(hawkbit.StatusStarted, noProgress, noMessage),
+		createStatus(hawkbit.StatusDownloading, noProgress, noMessage),
+		createStatus(hawkbit.StatusDownloading, 100.0, noMessage),
+		createStatus(hawkbit.StatusDownloaded, 100.0, noMessage),
+		createStatus(hawkbit.StatusInstalling, noProgress, noMessage),
+		createStatus(hawkbit.StatusInstalling, noProgress, "My final message!"),
+		createStatus(hawkbit.StatusInstalled, noProgress, "My final message!"),
+		createStatus(hawkbit.StatusFinishedSuccess, noProgress, "My final message!"),
+	)
+	checkStatusEvents(expectedStatuses, actualStatuses, t)
+}
+
+func checkStatusEvents(expectedStatuses []interface{}, actualStatuses []interface{}, t *testing.T) {
+	if len(expectedStatuses) != len(actualStatuses) {
+		t.Fatalf("wrong number of operation status events, expected statuses - %v, received events(includes whole payload) - %v",
+			expectedStatuses, actualStatuses)
+	}
+	for i, el := range expectedStatuses {
+		expected := el.(map[string]interface{})
+		actual := actualStatuses[i].(map[string]interface{})
+		if expected[statusParam] != actual[statusParam] {
+			t.Fatalf("received unexpected lastOperation status: %s != %s(actual)", expected[statusParam], actual[statusParam])
+		}
+		checkStatusParameter(expected[progressParam].(float64), actual, progressParam,
+			expected[progressParam].(float64) == noProgress, t)
+		checkStatusParameter(expected[messageParam], actual, messageParam, expected[messageParam] == noMessage, t)
+	}
+}
+
+func checkStatusParameter(expectedParamValue interface{}, actualStatus map[string]interface{},
+	name string, noValue bool, t *testing.T) {
+	receivedValue, ok := actualStatus[name]
+	if ok {
+		if noValue {
+			t.Fatalf("no %s expected in payload: %v", name, actualStatus)
+		}
+		if expectedParamValue != receivedValue {
+			t.Fatalf("received unexpected lastOperation %s: %s != %s", name, receivedValue, expectedParamValue)
+		}
+	} else if !noValue {
+		t.Fatalf("no %s found in payload: %v", name, actualStatus)
+	}
+}
+
+func prepareSoftwareUpdateAction(artifacts []*hawkbit.SoftwareArtifactAction) *hawkbit.SoftwareUpdateAction {
+	// Prepare simple software update action.
+	return &hawkbit.SoftwareUpdateAction{
 		CorrelationID: "test-correlation-id",
 		SoftwareModules: []*hawkbit.SoftwareModuleAction{{
 			SoftwareModule: &hawkbit.SoftwareModuleID{Name: "test", Version: "1.0.0"},
 			Artifacts:      artifacts,
 			Metadata:       map[string]string{"artifact-type": "plane"},
 		}},
-	}
-
-	// 2. Try to execute simple an download operation.
-	feature.downloadHandler(sua, feature.su)
-
-	// 2.1. Check for STARTED status.
-	if lo := mc.lastOperation(t); lo["status"] != "STARTED" {
-		t.Fatalf("received unexpected lastOperation status: %s != STARTED", lo["status"])
-	}
-
-	// 2.2. Check for DOWNLOADING status.
-	if lo := mc.lastOperation(t); lo["status"] != "DOWNLOADING" {
-		t.Fatalf("received unexpected lastOperation status: %s != DOWNLOADING", lo["status"])
-	}
-
-	// 2.3. Check for 100% DOWNLOADING status.
-	lo := mc.lastOperation(t)
-	if lo["status"] != "DOWNLOADING" {
-		t.Fatalf("received unexpected lastOperation status: %s != DOWNLOADING", lo["status"])
-	}
-	if lo["progress"] != 100.0 {
-		t.Fatalf("received unexpected lastOperation percent: %s != 100", lo["progress"])
-	}
-
-	// 2.4. Check for DOWNLOADED status.
-	if lo := mc.lastOperation(t); lo["status"] != "DOWNLOADED" {
-		t.Fatalf("received unexpected lastOperation status: %s != DOWNLOADED", lo["status"])
-	}
-
-	// 2.5. Check for FINISHED_SUCCESS status.
-	if lo := mc.lastOperation(t); lo["status"] != "FINISHED_SUCCESS" {
-		t.Fatalf("received unexpected lastOperation status: %s != FINISHED_SUCCESS", lo["status"])
-	}
-
-	// 3. Try to execute simple install operation.
-	feature.installHandler(sua, feature.su)
-
-	// 3.1. Check for STARTED status.
-	if lo := mc.lastOperation(t); lo["status"] != "STARTED" {
-		t.Fatalf("received unexpected lastOperation status: %s != STARTED", lo["status"])
-	}
-
-	// 3.2. Check for DOWNLOADING status.
-	lo = mc.lastOperation(t)
-	if lo["status"] != "DOWNLOADING" {
-		t.Fatalf("received unexpected lastOperation status: %s != DOWNLOADING", lo["status"])
-	}
-
-	// 3.3. Check for 100% DOWNLOADING status.
-	lo = mc.lastOperation(t)
-	if lo["status"] != "DOWNLOADING" {
-		t.Fatalf("received unexpected lastOperation status: %s != DOWNLOADING", lo["status"])
-	}
-	if lo["progress"] != 100.0 {
-		t.Fatalf("received unexpected lastOperation percent: %s != 100", lo["progress"])
-	}
-
-	// 3.4. Check for DOWNLOADED status.
-	if lo := mc.lastOperation(t); lo["status"] != "DOWNLOADED" {
-		t.Fatalf("received unexpected lastOperation status: %s != DOWNLOADED", lo["status"])
-	}
-
-	// 3.5. Check for INSTALLING status.
-	if lo := mc.lastOperation(t); lo["status"] != "INSTALLING" {
-		t.Fatalf("received unexpected lastOperation status: %s != INSTALLING", lo["status"])
-	}
-
-	//3.6. Check for INSTALLING status with 100%.
-	if lo := mc.lastOperation(t); lo["status"] != "INSTALLING" {
-		t.Fatalf("received unexpected lastOperation status: %s != INSTALLING", lo["status"])
-	}
-	if lo["progress"] != 100.0 {
-		t.Fatalf("received unexpected lastOperation percent: %s != 100", lo["progress"])
-	}
-
-	//3.7. Check for INSTALLED status with "My final message!" message.
-	lo = mc.lastOperation(t)
-	if lo["status"] != "INSTALLED" {
-		t.Fatalf("received unexpected lastOperation status: %s != INSTALLED", lo["status"])
-	}
-	if lo["message"] != "My final message!" {
-		t.Fatalf("received unexpected lastOperation message: %s != My final message!", lo["message"])
-	}
-	// 3.8. Check for FINISHED_SUCCESS status.
-	if lo := mc.lastOperation(t); lo["status"] != "FINISHED_SUCCESS" {
-		t.Fatalf("received unexpected lastOperation status: %s != FINISHED_SUCCESS", lo["status"])
 	}
 }
