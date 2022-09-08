@@ -34,10 +34,6 @@ type TestHTTPServer struct {
 	size int64
 	srv  *http.Server
 	t    *testing.T
-
-	failCountBadStatus int
-	failCopyError      bool
-	corruptFileError   bool
 }
 
 var (
@@ -45,6 +41,10 @@ var (
 	testOnceRange sync.Once
 	// testOnceSimple is used to add HTTP alias only once for the simple server.
 	testOnceSimple sync.Once
+
+	failCountBadStatus int
+	failCopyError      bool
+	corruptFileError   bool
 )
 
 var (
@@ -96,29 +96,28 @@ func (w *TestHTTPServer) Host(simple bool, secure bool, cert string, key string)
 	time.Sleep(1 * time.Second)
 }
 
-func (w *TestHTTPServer) setIncorrectBehavior(failCountBadStatus int, failCopyError bool, corruptFileError bool) {
-	w.failCountBadStatus = failCountBadStatus
-	w.failCopyError = failCopyError
-	w.corruptFileError = corruptFileError
+// TODO use as method of TestHTTPServer, fix behavior of http handler
+func setIncorrectBehavior(failCountBadStatusNum int, doFailCopyError bool, doCorruptFileError bool) {
+	failCountBadStatus = failCountBadStatusNum
+	failCopyError = doFailCopyError
+	corruptFileError = doCorruptFileError
 }
 
 // setAlias sets HTTP alias (only once).
-func (w *TestHTTPServer) setAlias(alias string, body string) *TestHTTPServer {
+func (w *TestHTTPServer) setAlias(alias string, body string) {
 	if _, ok := testAliases[alias]; !ok {
 		http.HandleFunc(fmt.Sprintf("/%s", alias), handlerSimpleDynamicAlias)
 	}
 	testAliases[alias] = body
-	return w
 }
 
-// AddInstallScript adds Install Script HTTP alias (only once).
-func (w *TestHTTPServer) AddInstallScript() *TestHTTPServer {
+// AddInstallScript adds install script HTTP alias (only once).
+func (w *TestHTTPServer) AddInstallScript() {
 	if runtime.GOOS == "windows" {
 		w.setAlias("install.bat", "@echo off\n(\necho message=My final message!) > status\nping 127.0.0.1\n")
 	} else {
 		w.setAlias("install.sh", "#!/bin/sh\necho 'message=My final message!\n' > status\nsleep 5\n")
 	}
-	return w
 }
 
 // Close closes the http server.
@@ -130,8 +129,8 @@ func (w *TestHTTPServer) Close() {
 
 // handlerRange handles incoming HTTP requests with range header support.
 func (w *TestHTTPServer) handlerRange(writer http.ResponseWriter, request *http.Request) {
-	if w.failCountBadStatus > 0 {
-		w.failCountBadStatus--
+	if failCountBadStatus > 0 {
+		failCountBadStatus--
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -144,10 +143,10 @@ func (w *TestHTTPServer) handlerRange(writer http.ResponseWriter, request *http.
 	r := request.Header.Get("range")
 	if r == "" { // No range is defined
 		writer.Header().Set("Content-Length", strconv.Itoa(int(w.size)))
-		if w.failCopyError {
-			write(writer, w.size/3, w.corruptFileError)
+		if failCopyError {
+			write(writer, w.size/3, corruptFileError)
 		} else {
-			write(writer, w.size, w.corruptFileError)
+			write(writer, w.size, corruptFileError)
 		}
 		return
 	}
@@ -185,10 +184,10 @@ func (w *TestHTTPServer) handlerRange(writer http.ResponseWriter, request *http.
 	writer.WriteHeader(http.StatusPartialContent)
 
 	// Send the (end-begin) amount of bytes to the client
-	if w.failCopyError {
-		write(writer, (end-begin+1)/3, w.corruptFileError)
+	if failCopyError {
+		write(writer, (end-begin+1)/3, corruptFileError)
 	} else {
-		write(writer, end-begin+1, w.corruptFileError)
+		write(writer, end-begin+1, corruptFileError)
 	}
 }
 
@@ -197,7 +196,7 @@ func (w *TestHTTPServer) handlerSimple(writer http.ResponseWriter, request *http
 	writer.Header().Set("Content-Type", "text/plain")
 	writer.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, w.name))
 	writer.Header().Set("Content-Length", strconv.Itoa(int(w.size)))
-	write(writer, w.size, w.corruptFileError)
+	write(writer, w.size, corruptFileError)
 }
 
 // write file content.

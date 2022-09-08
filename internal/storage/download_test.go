@@ -304,12 +304,12 @@ func TestRobustDownloadRetryBadStatus(t *testing.T) {
 	}
 	// Start Web server
 	srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+	setIncorrectBehavior(3, false, false)
 	srv.Host(false, false, "", "")
 	defer srv.Close()
 
 	name := filepath.Join(dir, art.FileName)
 
-	srv.setIncorrectBehavior(3, false, false)
 	if err := downloadArtifact(name, art, nil, "", 1, 0, make(chan struct{})); err == nil {
 		t.Fatal("error is expected when downloading artifact, due to bad response status")
 	}
@@ -322,7 +322,7 @@ func TestRobustDownloadRetryBadStatus(t *testing.T) {
 	if err := os.Remove(name); err != nil {
 		t.Fatalf("failed to delete test file %s", name)
 	}
-	srv.setIncorrectBehavior(2, false, false)
+	setIncorrectBehavior(2, false, false)
 	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
 		t.Fatal("error is expected when downloading artifact, due to bad response status")
 	}
@@ -359,18 +359,18 @@ func testCopyError(withInsufficientRetryCount bool, withCorruptedFile bool, t *t
 		for i := 0; i < 5; i++ {
 			srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
 			if withCorruptedFile {
-				srv.setIncorrectBehavior(0, false, true)
+				setIncorrectBehavior(0, false, true)
 			} else {
-				srv.setIncorrectBehavior(0, true, false)
+				setIncorrectBehavior(0, true, false)
 			}
 			srv.Host(false, false, "", "")
 			time.Sleep(2 * time.Second)
 			srv.Close()
 		}
 		srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
-		srv.setIncorrectBehavior(0, false, false)
+		setIncorrectBehavior(0, false, false)
 		srv.Host(false, false, "", "")
-		srv.setIncorrectBehavior(0, false, false)
+		setIncorrectBehavior(0, false, false)
 		serverClosing.Wait()
 		srv.Close()
 		serverClosed.Done()
@@ -384,7 +384,7 @@ func testCopyError(withInsufficientRetryCount bool, withCorruptedFile bool, t *t
 	err := downloadArtifact(name, art, nil, "", retryCount, 2*time.Second, make(chan struct{}))
 	if withInsufficientRetryCount {
 		if err == nil {
-			t.Fatal("error expected when downloading artifact, due to copy error")
+			t.Fatal("error is expected when downloading artifact, due to copy error")
 		}
 	} else {
 		if err != nil {
