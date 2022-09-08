@@ -96,7 +96,6 @@ func (w *TestHTTPServer) Host(simple bool, secure bool, cert string, key string)
 	time.Sleep(1 * time.Second)
 }
 
-// TODO use as method of TestHTTPServer, fix behavior of http handler
 func setIncorrectBehavior(failCountBadStatusNum int, doFailCopyError bool, doCorruptFileError bool) {
 	failCountBadStatus = failCountBadStatusNum
 	failCopyError = doFailCopyError

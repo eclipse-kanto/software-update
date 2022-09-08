@@ -158,17 +158,17 @@ func testScriptBasedSoftwareUpdatableOperations(noResume bool, t *testing.T) {
 		feature.serverCert = testCert
 		testDownloadInstall(feature, mc, wSecure.GenerateSoftwareArtifacts(true, "install"), t)
 	} else {
-		testResume(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), t)
+		testDisconnect(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), t)
 	}
 }
 
-func testResume(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifacts []*hawkbit.SoftwareArtifactAction, t *testing.T) {
+func testDisconnect(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifacts []*hawkbit.SoftwareArtifactAction, t *testing.T) {
 	sua := prepareSoftwareUpdateAction(artifacts)
-	testReconnectWhileRunningOperation(feature, mc, sua, false, t) // disconnect while downloading
-	testReconnectWhileRunningOperation(feature, mc, sua, true, t)  // disconnect while installing
+	testDisconnectWhileRunningOperation(feature, mc, sua, false, t) // disconnect while downloading
+	testDisconnectWhileRunningOperation(feature, mc, sua, true, t)  // disconnect while installing
 }
 
-func testReconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient,
+func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient,
 	sua *hawkbit.SoftwareUpdateAction, install bool, t *testing.T) {
 	var waitDisconnect sync.WaitGroup
 	waitDisconnect.Add(1)
