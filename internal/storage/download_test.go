@@ -164,14 +164,15 @@ func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T
 			defer os.RemoveAll(dir)
 
 			// Start http(s) server
-			srv := Host(":43234", art.FileName, int64(art.Size), false, isSecure(art.Link, t), validCert, validKey, t)
+			srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+			srv.Host(false, isSecure(art.Link, t), validCert, validKey)
 			defer srv.Close()
 			name := filepath.Join(dir, art.FileName)
 
 			// 1. Resume download of corrupted temporary file.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "wrong start")
 			if err := downloadArtifact(name, art, nil, certFile, 0, 0, make(chan struct{})); err == nil {
-				t.Fatal("downlaod of corrupted temporary file must fail")
+				t.Fatal("download of corrupted temporary file must fail")
 			}
 
 			// 2. Cancel in the middle of the download operation.
@@ -240,7 +241,8 @@ func TestDownloadToFileError(t *testing.T) {
 	}
 
 	// Start http(s) server
-	srv := Host(":43234", art.FileName, int64(art.Size), true, isSecure(art.Link, t), untrustedCert, untrustedKey, t)
+	srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+	srv.Host(true, isSecure(art.Link, t), untrustedCert, untrustedKey)
 	defer srv.Close()
 	name := filepath.Join(dir, art.FileName)
 
@@ -290,7 +292,7 @@ func TestDownloadToFileError(t *testing.T) {
 func TestRobustDownloadRetryBadStatus(t *testing.T) {
 	dir := "_tmp-download"
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatalf("failed create temporary directory: %v", err)
+		t.Fatalf("failed to create a temporary directory: %v", err)
 	}
 	// Remove temporary directory at the end
 	defer os.RemoveAll(dir)
@@ -301,14 +303,15 @@ func TestRobustDownloadRetryBadStatus(t *testing.T) {
 		HashValue: "ab2ce340d36bbaafe17965a3a2c6ed5b",
 	}
 	// Start Web server
-	srv := Host(":43234", art.FileName, int64(art.Size), false, false, "", "", t)
+	srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+	srv.Host(false, false, "", "")
 	defer srv.Close()
 
 	name := filepath.Join(dir, art.FileName)
 
-	failCountBadStatus = 3
+	srv.setIncorrectBehavior(3, false, false)
 	if err := downloadArtifact(name, art, nil, "", 1, 0, make(chan struct{})); err == nil {
-		t.Fatal("error expected when downloading artifact, due to bad response status")
+		t.Fatal("error is expected when downloading artifact, due to bad response status")
 	}
 
 	if err := downloadArtifact(name, art, nil, "", 5, time.Second, make(chan struct{})); err != nil {
@@ -319,9 +322,9 @@ func TestRobustDownloadRetryBadStatus(t *testing.T) {
 	if err := os.Remove(name); err != nil {
 		t.Fatalf("failed to delete test file %s", name)
 	}
-	failCountBadStatus = 2
+	srv.setIncorrectBehavior(2, false, false)
 	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
-		t.Fatal("error expected when downloading artifact, due to bad response status")
+		t.Fatal("error is expected when downloading artifact, due to bad response status")
 	}
 }
 
@@ -335,7 +338,7 @@ func TestRobustDownloadRetryCopyError(t *testing.T) {
 func testCopyError(withInsufficientRetryCount bool, withCorruptedFile bool, t *testing.T) {
 	dir := "_tmp-download"
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatalf("failed create temporary directory: %v", err)
+		t.Fatalf("failed to create a temporary directory: %v", err)
 	}
 	// Remove temporary directory at the end
 	defer os.RemoveAll(dir)
@@ -353,19 +356,21 @@ func testCopyError(withInsufficientRetryCount bool, withCorruptedFile bool, t *t
 	defer serverClosed.Wait()
 	defer serverClosing.Done()
 	go func() {
-		if withCorruptedFile {
-			corruptFileError = true
-		} else {
-			failCopyError = true
-		}
 		for i := 0; i < 5; i++ {
-			srv := Host(":43234", art.FileName, int64(art.Size), false, false, "", "", t)
+			srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+			if withCorruptedFile {
+				srv.setIncorrectBehavior(0, false, true)
+			} else {
+				srv.setIncorrectBehavior(0, true, false)
+			}
+			srv.Host(false, false, "", "")
 			time.Sleep(2 * time.Second)
 			srv.Close()
 		}
-		failCopyError = false
-		corruptFileError = false
-		srv := Host(":43234", art.FileName, int64(art.Size), false, false, "", "", t)
+		srv := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+		srv.setIncorrectBehavior(0, false, false)
+		srv.Host(false, false, "", "")
+		srv.setIncorrectBehavior(0, false, false)
 		serverClosing.Wait()
 		srv.Close()
 		serverClosed.Done()
@@ -407,11 +412,14 @@ func TestDownloadToFileSecureError(t *testing.T) {
 	}
 
 	// Start https servers
-	srvSecureInvalid := Host(":43234", art.FileName, int64(art.Size), true, true, expiredCert, expiredKey, t)
+	srvSecureInvalid := NewTestHTTPServer(":43234", art.FileName, int64(art.Size), t)
+	srvSecureInvalid.Host(true, true, expiredCert, expiredKey)
 	defer srvSecureInvalid.Close()
-	srvSecureUntrusted := Host(":43235", art.FileName, int64(art.Size), true, true, untrustedCert, untrustedKey, t)
+	srvSecureUntrusted := NewTestHTTPServer(":43235", art.FileName, int64(art.Size), t)
+	srvSecureUntrusted.Host(true, true, untrustedCert, untrustedKey)
 	defer srvSecureUntrusted.Close()
-	srvSecureValid := Host(":43236", art.FileName, int64(art.Size), true, true, validCert, validKey, t)
+	srvSecureValid := NewTestHTTPServer(":43236", art.FileName, int64(art.Size), t)
+	srvSecureValid.Host(true, true, validCert, validKey)
 	defer srvSecureValid.Close()
 	name := filepath.Join(dir, art.FileName)
 

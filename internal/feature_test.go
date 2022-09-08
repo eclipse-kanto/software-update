@@ -31,6 +31,10 @@ const (
 
 	noProgress = -12345
 	noMessage  = "no message"
+
+	statusParam   = "status"
+	progressParam = "progress"
+	messageParam  = "message"
 )
 
 // TestScriptBasedConstructor tests NewScriptBasedSU with wrong broker URL.
@@ -131,10 +135,14 @@ func testScriptBasedSoftwareUpdatableOperations(noResume bool, t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// Prepare/Close simple HTTP server used to host testing artifacts
-	w := storage.Host(testDefaultHost, "", 0, true, false, "", "", t).AddInstallScript()
+	w := storage.NewTestHTTPServer(testDefaultHost, "", 0, t)
+	w.Host(true, false, "", "")
+	w.AddInstallScript()
 	defer w.Close()
 
-	wSecure := storage.Host(testDefaultHostSecure, "", 0, true, true, testCert, testKey, t).AddInstallScript()
+	wSecure := storage.NewTestHTTPServer(testDefaultHostSecure, "", 0, t)
+	wSecure.Host(true, true, testCert, testKey)
+	wSecure.AddInstallScript()
 	defer wSecure.Close()
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable.
@@ -157,7 +165,7 @@ func testScriptBasedSoftwareUpdatableOperations(noResume bool, t *testing.T) {
 func testResume(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifacts []*hawkbit.SoftwareArtifactAction, t *testing.T) {
 	sua := prepareSoftwareUpdateAction(artifacts)
 	testReconnectWhileRunningOperation(feature, mc, sua, false, t) // disconnect while downloading
-	testReconnectWhileRunningOperation(feature, mc, sua, true, t)  // disconnect while downloading or installing
+	testReconnectWhileRunningOperation(feature, mc, sua, true, t)  // disconnect while installing
 }
 
 func testReconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient,
@@ -169,18 +177,19 @@ func testReconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, m
 	} else {
 		feature.downloadHandler(sua, feature.su)
 	}
-	firstIterationEventCount, secondIterationEventCount := 2, 3
+	preDisconnectEventCount := 2  // STARTED, DOWNLOADING
+	postDisconnectEventCount := 3 // DOWNLOADING(100)/INSTALLING(100), DOWNLOADED/INSTALLED, FINISHED_SUCCESS
 	if install {
-		firstIterationEventCount = 5
+		preDisconnectEventCount = 5 // STARTED, DOWNLOADING, DOWNLOADING(100), DOWNLOADED, INSTALLING
 	}
-	statuses := pullStatusChanges(mc, firstIterationEventCount) // should go between DOWNLOADING/INSTALLING and next state
+	statuses := pullStatusChanges(mc, preDisconnectEventCount) // should go between DOWNLOADING/INSTALLING and next state
 
-	go func() { // blocks until done
+	go func() { // decrements count number with 1, when disconnected
 		feature.Disconnect(false)
 		waitDisconnect.Done()
 	}()
 
-	statuses = append(statuses, pullStatusChanges(mc, secondIterationEventCount)...)
+	statuses = append(statuses, pullStatusChanges(mc, postDisconnectEventCount)...)
 	waitDisconnect.Wait()
 	defer feature.Connect(mc, supConfig, edgeCfg)
 	if install {
@@ -194,9 +203,6 @@ func pullStatusChanges(mc *mockedClient, expectedCount int) []interface{} {
 	var statuses []interface{}
 	for i := 0; i < expectedCount; i++ {
 		lo := mc.pullLastOperationStatus()
-		if _, ok := lo["status"]; !ok {
-			break
-		}
 		statuses = append(statuses, lo)
 	}
 	return statuses
@@ -208,70 +214,81 @@ func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient
 	// Try to execute a simple download operation.
 	feature.downloadHandler(sua, feature.su)
 
-	statuses := pullStatusChanges(mc, 5)
+	statuses := pullStatusChanges(mc, 5) // STARTED, DOWNLOADING, DOWNLOADING(100), DOWNLOADED, FINISHED_SUCCESS
 	checkDownloadStatusEvents(statuses, t)
 
 	// Try to execute a simple install operation.
 	feature.installHandler(sua, feature.su)
 
-	statuses = pullStatusChanges(mc, 8)
+	statuses = pullStatusChanges(mc, 8) // STARTED, DOWNLOADING, DOWNLOADING(100), DOWNLOADED,
+	// INSTALLING, INSTALLING(100), INSTALLED, FINISHED_SUCCESS
 	checkInstallStatusEvents(statuses, t)
 }
 
-func checkDownloadStatusEvents(statuses []interface{}, t *testing.T) {
-	statusSeq := []string{
-		string(hawkbit.StatusStarted), string(hawkbit.StatusDownloading), string(hawkbit.StatusDownloading),
-		string(hawkbit.StatusDownloaded), string(hawkbit.StatusFinishedSuccess),
+func createStatus(status hawkbit.Status, progress float64, message string) map[string]interface{} {
+	return map[string]interface{}{
+		statusParam:   string(status),
+		progressParam: progress,
+		messageParam:  message,
 	}
-	progressSeq := []float64{
-		noProgress, noProgress, 100.0, 100.0, noProgress,
-	}
-	messageSeq := []string{
-		noMessage, noMessage, noMessage, noMessage, noMessage,
-	}
-	checkStatusEvents(statusSeq, progressSeq, messageSeq, statuses, t)
 }
 
-func checkInstallStatusEvents(statuses []interface{}, t *testing.T) {
-	statusSeq := []string{
-		string(hawkbit.StatusStarted), string(hawkbit.StatusDownloading), string(hawkbit.StatusDownloading),
-		string(hawkbit.StatusDownloaded), string(hawkbit.StatusInstalling), string(hawkbit.StatusInstalling),
-		string(hawkbit.StatusInstalled), string(hawkbit.StatusFinishedSuccess),
-	}
-	progressSeq := []float64{
-		noProgress, noProgress, 100.0, 100.0, noProgress, noProgress, noProgress, noProgress,
-	}
-	messageSeq := []string{
-		noMessage, noMessage, noMessage, noMessage, noMessage, "My final message!", "My final message!", "My final message!",
-	}
-	checkStatusEvents(statusSeq, progressSeq, messageSeq, statuses, t)
+func checkDownloadStatusEvents(actualStatuses []interface{}, t *testing.T) {
+	var expectedStatuses []interface{}
+	expectedStatuses = append(expectedStatuses,
+		createStatus(hawkbit.StatusStarted, noProgress, noMessage),
+		createStatus(hawkbit.StatusDownloading, noProgress, noMessage),
+		createStatus(hawkbit.StatusDownloading, 100.0, noMessage),
+		createStatus(hawkbit.StatusDownloaded, 100.0, noMessage),
+		createStatus(hawkbit.StatusFinishedSuccess, noProgress, noMessage),
+	)
+	checkStatusEvents(expectedStatuses, actualStatuses, t)
 }
 
-func checkStatusEvents(statusSeq []string, progressSeq []float64, messageSeq []string, statuses []interface{}, t *testing.T) {
-	if len(statusSeq) != len(statuses) {
-		t.Fatalf("wrong number of operation status events, expected statuses - %v, received events(includes whole payload) - %v", statusSeq, statuses)
+func checkInstallStatusEvents(actualStatuses []interface{}, t *testing.T) {
+	var expectedStatuses []interface{}
+	expectedStatuses = append(expectedStatuses,
+		createStatus(hawkbit.StatusStarted, noProgress, noMessage),
+		createStatus(hawkbit.StatusDownloading, noProgress, noMessage),
+		createStatus(hawkbit.StatusDownloading, 100.0, noMessage),
+		createStatus(hawkbit.StatusDownloaded, 100.0, noMessage),
+		createStatus(hawkbit.StatusInstalling, noProgress, noMessage),
+		createStatus(hawkbit.StatusInstalling, noProgress, "My final message!"),
+		createStatus(hawkbit.StatusInstalled, noProgress, "My final message!"),
+		createStatus(hawkbit.StatusFinishedSuccess, noProgress, "My final message!"),
+	)
+	checkStatusEvents(expectedStatuses, actualStatuses, t)
+}
+
+func checkStatusEvents(expectedStatuses []interface{}, actualStatuses []interface{}, t *testing.T) {
+	if len(expectedStatuses) != len(actualStatuses) {
+		t.Fatalf("wrong number of operation status events, expected statuses - %v, received events(includes whole payload) - %v",
+			expectedStatuses, actualStatuses)
 	}
-	for i, el := range statusSeq {
-		lo := statuses[i].(map[string]interface{})
-		if el != lo["status"] {
-			t.Fatalf("received unexpected lastOperation status: %s != %s", lo["status"], el)
+	for i, el := range expectedStatuses {
+		expected := el.(map[string]interface{})
+		actual := actualStatuses[i].(map[string]interface{})
+		if expected[statusParam] != actual[statusParam] {
+			t.Fatalf("received unexpected lastOperation status: %s != %s(actual)", expected[statusParam], actual[statusParam])
 		}
-		checkStatusParameter("progress", progressSeq[i], progressSeq[i] == noProgress, lo, t)
-		checkStatusParameter("message", messageSeq[i], messageSeq[i] == noMessage, lo, t)
+		checkStatusParameter(expected[progressParam].(float64), actual, progressParam,
+			expected[progressParam].(float64) == noProgress, t)
+		checkStatusParameter(expected[messageParam], actual, messageParam, expected[messageParam] == noMessage, t)
 	}
 }
 
-func checkStatusParameter(name string, expectedValue interface{}, noValue bool, lo map[string]interface{}, t *testing.T) {
-	receivedValue, ok := lo[name]
+func checkStatusParameter(expectedParamValue interface{}, actualStatus map[string]interface{},
+	name string, noValue bool, t *testing.T) {
+	receivedValue, ok := actualStatus[name]
 	if ok {
 		if noValue {
-			t.Fatalf("no %s expected in payload: %v", name, lo)
+			t.Fatalf("no %s expected in payload: %v", name, actualStatus)
 		}
-		if expectedValue != receivedValue {
-			t.Fatalf("received unexpected lastOperation %s: %s != %s", name, receivedValue, expectedValue)
+		if expectedParamValue != receivedValue {
+			t.Fatalf("received unexpected lastOperation %s: %s != %s", name, receivedValue, expectedParamValue)
 		}
 	} else if !noValue {
-		t.Fatalf("no %s found in payload: %v", name, lo)
+		t.Fatalf("no %s found in payload: %v", name, actualStatus)
 	}
 }
 
