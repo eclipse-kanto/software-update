@@ -217,7 +217,6 @@ func (f *ScriptBasedSoftwareUpdatable) validateLocalArtifacts(module *storage.Mo
 		location := f.locateArtifact(sa.Link)
 		if location == "" {
 			msg := fmt.Sprintf("could not locate local artifact [%s]", sa.Link)
-			logger.Error(msg)
 			return fmt.Errorf(msg)
 		}
 		logger.Infof("resolved local artifact location - %s", location)

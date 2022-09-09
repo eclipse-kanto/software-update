@@ -27,9 +27,10 @@ import (
 )
 
 const (
-	flagVersion    = "version"
-	flagConfigFile = "configFile"
-	flagInstall    = "install"
+	flagVersion     = "version"
+	flagConfigFile  = "configFile"
+	flagInstall     = "install"
+	flagInstallPath = "installPath"
 )
 
 var (
@@ -41,7 +42,6 @@ var (
 			"\n  'strict' - artifacts can only be located in directories, included in installPath property value" +
 			"\n  'scoped' - artifacts can only be located in directories or their subdirectories recursively, included in installPath property value" +
 			"\n  'lax' - artifacts can be located anywhere on local file system. Use with care!",
-		"installPath": string(os.PathListSeparator),
 	}
 )
 
@@ -57,7 +57,7 @@ type cfg struct {
 	ServerCert            string       `json:"serverCert" descr:"A PEM encoded certificate \"file\" for secure artifact download"`
 	DownloadRetryCount    int          `json:"downloadRetryCount" def:"0" descr:"Number of retries, in case of a failed download.\n By default no retries are supported."`
 	DownloadRetryInterval durationTime `json:"downloadRetryInterval" def:"5s" descr:"Interval between retries, in case of a failed download.\n Should be a sequence of decimal numbers, each with optional fraction and a unit suffix, such as '300ms', '1.5h', '10m30s', etc. Valid time units are 'ns', 'us' (or 'µs'), 'ms', 's', 'm', 'h'."`
-	InstallPath           string       `json:"installPath" def:"" descr:"A set ot locations on local file system, where to search for module artifacts.\nCommon path separators are supported - \",\", and \"%s\".\nIf empty - the current process directory will be used."`
+	InstallPath           []string     `json:"installPath" descr:"Local file system directories, where to search for module artifacts.\nIf empty - the working directory will be used."`
 	Mode                  string       `json:"mode" def:"strict" descr:"%s"`
 	LogFile               string       `json:"logFile" def:"log/software-update.log" descr:"Log file location in storage directory"`
 	LogLevel              string       `json:"logLevel" def:"INFO" descr:"Log levels are ERROR, WARN, INFO, DEBUG, TRACE"`
@@ -76,6 +76,7 @@ func InitFlags(version string) (*ScriptBasedSoftwareUpdatableConfig, *logger.Log
 
 	// the install flag is set in the config object initially
 	flag.Var(&suConfig.InstallCommand, flagInstall, "Defines the absolute path to install script")
+	flag.Var(&suConfig.InstallPath, flagInstallPath, "Local file system directories, where to search for module artifacts.\nIf empty - the working directory will be used.")
 
 	initFlagsWithDefaultValues(flgConfig)
 	flag.Parse()
@@ -169,10 +170,10 @@ func applyFlags(flagsConfig interface{}) {
 	flag.Visit(func(f *flag.Flag) {
 		name := toFieldName(f.Name)
 		srcFieldVal := flagsConfigVal.FieldByName(name)
-		if srcFieldVal.Kind() != reflect.Invalid {
+		if srcFieldVal.Kind() != reflect.Invalid && srcFieldVal.Kind() != reflect.Struct {
 			dstFieldSu := suConfigVal.FieldByName(name)
 			dstFieldLog := logConfigVal.FieldByName(name)
-			if dstFieldSu.Kind() != reflect.Invalid {
+			if dstFieldSu.Kind() != reflect.Invalid && dstFieldSu.Kind() != reflect.Struct {
 				dstFieldSu.Set(srcFieldVal)
 			} else if dstFieldLog.Kind() != reflect.Invalid {
 				dstFieldLog.Set(srcFieldVal)
@@ -209,6 +210,12 @@ func applyConfigurationFile(configFile string) error {
 		}
 	}
 
+	if len(def.InstallPath) > 0 && isNotVisited(flagInstallPath) {
+		for _, v := range def.InstallPath {
+			suConfig.InstallPath.Set(v)
+		}
+	}
+
 	// Fulfil Log configuration with default/configuration values.
 	copyConfigData(def, logConfig)
 	return nil
@@ -231,7 +238,7 @@ func copyConfigData(sourceConfig interface{}, targetConfig interface{}) {
 	for i := 0; i < typeOfSourceConfig.NumField(); i++ {
 		fieldType := typeOfSourceConfig.Field(i)
 		fieldToSet := targetConfigVal.FieldByName(fieldType.Name)
-		if fieldToSet.Kind() != reflect.Invalid {
+		if fieldToSet.Kind() != reflect.Invalid && fieldToSet.Kind() != reflect.Struct {
 			fieldToSet.Set(sourceConfigVal.FieldByName(fieldType.Name))
 		}
 	}

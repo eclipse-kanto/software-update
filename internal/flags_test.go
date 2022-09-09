@@ -13,7 +13,6 @@ package feature
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -52,6 +51,25 @@ func TestInstallCommandFlag(t *testing.T) {
 		c(flagInstall, expectedInstallArgs)})
 
 	assertInstallCommand(t, expectedInstallCMD, expectedInstallArgs)
+}
+
+// TestInstallPathCommandFlag tests the initialization with flags when install path is provided
+// with flag, but also in config file. Assert that the flag has higher priority.
+func TestInstallPathCommandFlag(t *testing.T) {
+	notExpectedPath := "path1"
+	expectedPath := "path2"
+
+	// Prepare test default dir
+	dir := assertPath(t, testDirFlags, true)
+	defer os.RemoveAll(dir)
+
+	content := "{\"installPath\": [\"" + notExpectedPath + "\"]}"
+	writeToConfigFile(t, content)
+
+	setFlags([]string{c(flagConfigFile, testConfigFilePath),
+		c(flagInstallPath, expectedPath)})
+
+	assertInstallPath(t, expectedPath)
 }
 
 // TestInstallCommandConfig tests the initialization with flags, when install command is provided only
@@ -164,7 +182,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 		InstallCommand:        command{cmd: expectedInstall},
 		DownloadRetryCount:    expectedDownloadRetryCount,
 		DownloadRetryInterval: getDurationTime(t, expectedDownloadRetryInterval),
-		InstallPath:           expectedInstallPath,
+		InstallPath:           pathArgs{args: []string{expectedInstallPath}},
 		Mode:                  expectedMode,
 		FeatureID:             expectedFeatureID,
 		ModuleType:            expectedModuleType,
@@ -232,7 +250,7 @@ func TestInitFlagsConfigAllPropertiesProvided(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	content := "{\"Broker\": \"tcp://host:1234\",\"Username\": \"TestUser\",\"Password\": \"TestPass\",\"StorageLocation\": \"_tmp-flags\",\"FeatureID\": \"SoftwareTestUpdatable\",\"ModuleType\": \"TestSoftware\",\"ArtifactType\": \"TestArchive\"," +
-		"\"InstallPath\":\"/var/tmp/storage\", \"DownloadRetryInterval\":\"7s\", \"Mode\":\"Scoped\", \"LogFile\": \"TestLogFile.txt\",\"LogLevel\": \"TRACE\",\"LogFileSize\": 10,\"LogFileCount\": 20,\"LogFileMaxAge\": 30}"
+		"\"DownloadRetryInterval\":\"7s\", \"Mode\":\"Scoped\", \"LogFile\": \"TestLogFile.txt\",\"LogLevel\": \"TRACE\",\"LogFileSize\": 10,\"LogFileCount\": 20,\"LogFileMaxAge\": 30}"
 	writeToConfigFile(t, content)
 
 	setFlags([]string{c(flagConfigFile, testConfigFilePath)})
@@ -245,7 +263,6 @@ func TestInitFlagsConfigAllPropertiesProvided(t *testing.T) {
 		StorageLocation:       dir,
 		Username:              "TestUser",
 		Password:              "TestPass",
-		InstallPath:           "/var/tmp/storage",
 		DownloadRetryInterval: getDurationTime(t, "7s"),
 		Mode:                  "Scoped",
 	}
@@ -383,6 +400,21 @@ func assertInstallCommand(t *testing.T, expectedInstallCMD string, expectedInsta
 	}
 }
 
+// assertInstallPath verifies the result when initializing flags with install path,
+// which is specified with config file or flag
+func assertInstallPath(t *testing.T, expectedInstallPath string) {
+	sc, _, err := InitFlags(testVersion)
+	if err != nil {
+		t.Errorf("not expecting error when initializing with install config: %v", err)
+	}
+	if len(sc.InstallPath.args) != 1 {
+		t.Error("expecting install path to be set")
+	}
+	if sc.InstallPath.args[0] != expectedInstallPath {
+		t.Errorf("unmatching install path args, expected %v, actual %v", expectedInstallPath, sc.InstallCommand.args)
+	}
+}
+
 // c function is used to Construct the name and value in flag format
 func c(flagName string, flagValue string) string {
 	return "-" + flagName + "=" + flagValue
@@ -451,6 +483,5 @@ func getDurationTime(t *testing.T, defaultValue string) (result durationTime) {
 	if err != nil {
 		t.Fatalf("unable to get duration time from %s", defaultValue)
 	}
-	fmt.Println("result", result)
 	return
 }

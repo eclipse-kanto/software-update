@@ -205,8 +205,7 @@ func getInput(artifact *Artifact, offset int64, serverCert string) (io.ReadClose
 func getFileInput(location string, offset int64) (io.ReadCloser, bool, error) {
 	file, err := os.Open(location)
 	if err != nil {
-		logger.Errorf("error opening file - %s: %v", location, err)
-		return nil, false, err
+		return nil, false, fmt.Errorf("error opening file - %s: %v", location, err)
 	}
 	logger.Infof("opened local file artifact - %s", file)
 	if offset > 0 {
@@ -219,8 +218,7 @@ func requestDownload(link string, offset int64, serverCert string) (*http.Respon
 	// Create new HTTP request with Range header.
 	request, err := http.NewRequest(http.MethodGet, link, nil)
 	if err != nil {
-		logger.Errorf("error doing http(s) request to %s", link)
-		return nil, err
+		return nil, fmt.Errorf("error doing http(s) request to %s", link)
 	}
 	if offset > 0 {
 		request.Header.Set("Range", fmt.Sprintf("bytes=%v-", offset))
@@ -231,8 +229,7 @@ func requestDownload(link string, offset int64, serverCert string) (*http.Respon
 	if len(serverCert) > 0 {
 		caCert, err := ioutil.ReadFile(serverCert)
 		if err != nil {
-			logger.Errorf("error reading CA certificate file - \"%s\"", serverCert)
-			return nil, err
+			return nil, fmt.Errorf("error reading CA certificate file - \"%s\"", serverCert)
 		}
 		caCertPool = x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)

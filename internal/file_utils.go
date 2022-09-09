@@ -18,6 +18,10 @@ import (
 	"github.com/eclipse-kanto/software-update/internal/logger"
 )
 
+var (
+	defaultSearchPath = []string{"."}
+)
+
 func isFile(link string) bool {
 	if fs, err := os.Stat(link); !os.IsNotExist(err) && !fs.IsDir() {
 		return true
@@ -36,16 +40,21 @@ func (f *ScriptBasedSoftwareUpdatable) locateArtifact(link string) string {
 	fileCheck := isFile(link)
 	paths := f.installPath
 	if len(paths) == 0 { // include the current dir
-		paths = []string{"."}
+		paths = defaultSearchPath
 	}
+	var ok bool
 	var accessDenied string
 	for _, path := range paths {
-		if fileCheck && f.isAccessPermitted(link, path, &accessDenied) {
-			return link
+		if fileCheck {
+			if ok, accessDenied = f.isAccessPermitted(link, path); ok {
+				return link
+			}
 		}
 		location := filepath.Join(path, link)
-		if isFile(location) && f.isAccessPermitted(location, path, &accessDenied) {
-			return location
+		if isFile(location) {
+			if ok, accessDenied = f.isAccessPermitted(location, path); ok {
+				return location
+			}
 		}
 	}
 	if accessDenied != "" {
@@ -54,9 +63,9 @@ func (f *ScriptBasedSoftwareUpdatable) locateArtifact(link string) string {
 	return ""
 }
 
-func (f *ScriptBasedSoftwareUpdatable) isAccessPermitted(location, allowedPath string, accessDenied *string) bool {
+func (f *ScriptBasedSoftwareUpdatable) isAccessPermitted(location, allowedPath string) (bool, string) {
 	if f.accessMode == modeLax {
-		return true
+		return true, ""
 	}
 
 	var targetAbs, allowedDir, targetDir string
@@ -64,24 +73,23 @@ func (f *ScriptBasedSoftwareUpdatable) isAccessPermitted(location, allowedPath s
 
 	if targetAbs, err = filepath.Abs(location); err != nil { // just in case
 		logger.Debugf("cannot determine absolute path of [%s]", location)
-		return false
+		return false, ""
 	}
 	targetDir = filepath.Dir(targetAbs)
 
 	if allowedDir, err = filepath.Abs(allowedPath); err != nil {
-		logger.Debugf("invalid install path directory - [%s]", allowedPath)
-		return false
+		logger.Debugf("invalid install path directory(cannot determine absolute path) - [%s]", allowedPath)
+		return false, ""
 	}
 	if !isDir(allowedDir) {
-		logger.Debugf("invalid install path directory - [%s]", allowedDir)
-		return false
+		logger.Debugf("invalid install path location(not a directory) - [%s]", allowedDir)
+		return false, ""
 	}
 
 	if (f.accessMode == modeStrict && targetDir == allowedDir) || (f.accessMode == modeScoped && isSubDir(targetDir, allowedDir)) {
-		return true
+		return true, ""
 	}
-	*accessDenied = "artifact %s found, but access to it was denied"
-	return false
+	return false, "artifact %s found, but access to it was denied"
 }
 
 // dir and sub must be absolute paths

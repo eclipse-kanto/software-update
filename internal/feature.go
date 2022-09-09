@@ -55,7 +55,7 @@ type ScriptBasedSoftwareUpdatableConfig struct {
 	ServerCert            string
 	DownloadRetryCount    int
 	DownloadRetryInterval durationTime
-	InstallPath           string
+	InstallPath           pathArgs
 	Mode                  string
 	InstallCommand        command
 }
@@ -99,7 +99,7 @@ func InitScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Ed
 		// Interval between download reattempts
 		downloadRetryInterval: time.Duration(scriptSUPConfig.DownloadRetryInterval),
 		// Install locations for local artifacts
-		installPath: parseInstallPaths(scriptSUPConfig.InstallPath),
+		installPath: scriptSUPConfig.InstallPath.args,
 		// Access mode for local artifacts
 		accessMode: initAccessMode(scriptSUPConfig.Mode),
 		// Define the module artifact(s) type: archive or plane
@@ -166,10 +166,6 @@ func (scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) Validate() error {
 		return fmt.Errorf("invalid mode value, must be either strict, scoped or lax")
 	}
 	return nil
-}
-
-func parseInstallPaths(installPaths string) []string {
-	return strings.FieldsFunc(installPaths, storage.SplitArtifacts)
 }
 
 func initAccessMode(accessMode string) string {

@@ -26,6 +26,8 @@ import (
 	"github.com/eclipse-kanto/software-update/internal/logger"
 )
 
+const PROTOCOL_FILE = "FILE"
+
 var (
 	// ErrCancel represents cancel operation error.
 	ErrCancel = errors.New("cancel operation")
@@ -101,7 +103,7 @@ func NewStorage(location string) (*Storage, error) {
 		ModulesPath:       filepath.Join(location, "modules"),
 		done:              make(chan struct{}),
 	}
-	// Create Downlaod directory.
+	// Create Download directory.
 	if err := os.MkdirAll(this.DownloadPath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create download directory: %v", err)
 	}

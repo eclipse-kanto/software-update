@@ -137,6 +137,7 @@ Downloading:
 		return f.validateLocalArtifacts(module)
 	}); opError != nil {
 		opErrorMsg = errDownload
+		logger.Errorf("error downloading module [%s.%s] - %v", module.Name, module.Version, opError)
 		return opError == storage.ErrCancel
 	}
 
@@ -201,7 +202,7 @@ Installing:
 		module: &hawkbit.SoftwareModuleID{Name: module.Name, Version: module.Version},
 	}).waitFor(execInstallScriptDir)
 	if err != nil {
-		logger.Debugf("fail to start progress monitor: %v", err)
+		logger.Errorf("fail to start progress monitor: %v", err)
 	}
 
 	// Start install script
