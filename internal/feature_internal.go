@@ -211,7 +211,7 @@ func setLastOS(su *hawkbit.SoftwareUpdatable, os *hawkbit.OperationStatus) {
 func (f *ScriptBasedSoftwareUpdatable) validateLocalArtifacts(module *storage.Module) error {
 	logger.Debugf("validating local artifacts of module - %v", module)
 	for _, sa := range module.Artifacts {
-		if !sa.Local {
+		if !storage.IsFileLink(sa.Link) {
 			continue
 		}
 		location := f.locateArtifact(sa.Link)

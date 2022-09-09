@@ -25,6 +25,11 @@ import (
 	"github.com/eclipse-kanto/software-update/internal/logger"
 )
 
+var (
+	prefHTTP  = strings.ToLower(string(hawkbit.HTTP)) + "://"
+	prefHTTPS = strings.ToLower(string(hawkbit.HTTPS)) + "://"
+)
+
 // ReadLn reads reads first line from a file.
 func ReadLn(fn string) (string, error) {
 	file, err := os.Open(fn)
@@ -119,6 +124,12 @@ func FindAvailableLocation(parent string) (string, error) {
 // between artifacts and install directories.
 func SplitArtifacts(r rune) bool {
 	return r == ',' || r == os.PathListSeparator
+}
+
+// IsFileLink is a helper function, checking whether an artifact link is a local file
+func IsFileLink(link string) bool {
+	l := strings.ToLower(link)
+	return !strings.HasPrefix(l, prefHTTP) && !strings.HasPrefix(l, prefHTTPS)
 }
 
 func loadInstalledDep(dep string) (*hawkbit.DependencyDescription, error) {
@@ -219,7 +230,6 @@ func toArtifact(sa *hawkbit.SoftwareArtifactAction, copy bool) (*Artifact, error
 		artifact.Link = sa.Download[hawkbit.HTTP].URL
 	} else if sa.Download[ProtocolFile] != nil {
 		artifact.Link = sa.Download[ProtocolFile].URL
-		artifact.Local = true
 	} else {
 		return nil, fmt.Errorf("unknown or missing link for artifact %s", sa.Filename)
 	}

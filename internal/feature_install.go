@@ -173,11 +173,11 @@ Installing:
 		var installScriptExtLocation string
 		for _, sa := range module.Artifacts {
 			if runtime.GOOS == "windows" {
-				if sa.FileName == "install.bat" && sa.Local && !sa.Copy {
+				if sa.FileName == "install.bat" && storage.IsFileLink(sa.Link) && !sa.Copy {
 					installScriptExtLocation = sa.Link
 					break
 				}
-			} else if sa.FileName == "install.sh" && sa.Local && !sa.Copy {
+			} else if sa.FileName == "install.sh" && storage.IsFileLink(sa.Link) && !sa.Copy {
 				installScriptExtLocation = sa.Link
 				break
 			}
