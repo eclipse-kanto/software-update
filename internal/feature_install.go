@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 
 	"github.com/eclipse-kanto/software-update/hawkbit"
@@ -63,13 +64,15 @@ func (f *ScriptBasedSoftwareUpdatable) installModules(
 // installModule returns true if canceled!
 func (f *ScriptBasedSoftwareUpdatable) installModule(
 	cid string, module *storage.Module, dir string, su *hawkbit.SoftwareUpdatable) bool {
-	// Install module to direcotry.
+	// Install module to directory.
 	logger.Infof("Install module [%s.%s] from directory: %s", module.Name, module.Version, dir)
 	// Create few useful variables.
 	id := module.Name + ":" + module.Version
 	s := filepath.Join(dir, storage.InternalStatusName)
 	var opError error
 	opErrorMsg := errRuntime
+
+	execInstallScriptDir := dir
 
 	// Process final operation status in defer to also catch potential panic calls.
 	defer func() {
@@ -84,7 +87,7 @@ func (f *ScriptBasedSoftwareUpdatable) installModule(
 			if exiterr, ok := opError.(*exec.ExitError); ok {
 				logger.Errorf("failed to install module [%s.%s][ExitCode: %v]: %v",
 					module.Name, module.Version, exiterr.ExitCode(), opError)
-				setLastOS(su, newFileOS(dir, cid, module, hawkbit.StatusFinishedError).
+				setLastOS(su, newFileOS(execInstallScriptDir, cid, module, hawkbit.StatusFinishedError).
 					WithStatusCode(strconv.Itoa(exiterr.ExitCode())).
 					WithMessage(opErrorMsg))
 			} else {
@@ -92,7 +95,7 @@ func (f *ScriptBasedSoftwareUpdatable) installModule(
 				setLastOS(su, newOS(cid, module, hawkbit.StatusFinishedError).WithMessage(opErrorMsg))
 			}
 		} else { // Success
-			setLastOS(su, newFileOS(dir, cid, module, hawkbit.StatusFinishedSuccess))
+			setLastOS(su, newFileOS(execInstallScriptDir, cid, module, hawkbit.StatusFinishedSuccess))
 		}
 	}()
 
@@ -130,7 +133,9 @@ Started:
 Downloading:
 	if opError = f.store.DownloadModule(dir, module, func(progress int) {
 		setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading).WithProgress(progress))
-	}, f.serverCert, f.downloadRetryCount, f.downloadRetryInterval); opError != nil {
+	}, f.serverCert, f.downloadRetryCount, f.downloadRetryInterval, func() error {
+		return f.validateLocalArtifacts(module)
+	}); opError != nil {
 		opErrorMsg = errDownload
 		return opError == storage.ErrCancel
 	}
@@ -147,17 +152,6 @@ Downloaded:
 	storage.WriteLn(s, string(hawkbit.StatusInstalling))
 Installing:
 
-	// Monitor install progress
-	monitor, err := (&monitor{
-		status: hawkbit.StatusInstalling,
-		su:     su,
-		cid:    cid,
-		module: &hawkbit.SoftwareModuleID{Name: module.Name, Version: module.Version},
-	}).waitFor(dir)
-	if err != nil {
-		logger.Debugf("fail to start progress monitor: %v", err)
-	}
-
 	// Get artifact type
 	artifactType := f.artifactType
 	if module.Metadata != nil && module.Metadata["artifact-type"] != "" {
@@ -166,7 +160,7 @@ Installing:
 	if artifactType == "archive" { // Extract if needed
 		if len(module.Artifacts) > 1 { // Only one archive/artifact is allowed in archive modules
 			opErrorMsg = errMultiArchives
-			opError = fmt.Errorf("archive modules cannot have multiples artifacts")
+			opError = fmt.Errorf(opErrorMsg)
 			return false
 		}
 		logger.Debugf("[%s.%s] Extract module archive(s) to: ", module.Name, module.Version)
@@ -174,11 +168,45 @@ Installing:
 			opErrorMsg = errExtractArchive
 			return false
 		}
+	} else {
+		var installScriptExtLocation string
+		for _, sa := range module.Artifacts {
+			if runtime.GOOS == "windows" {
+				if sa.FileName == "install.bat" && sa.Local && !sa.Copy {
+					installScriptExtLocation = sa.Link
+					break
+				}
+			} else if sa.FileName == "install.sh" && sa.Local && !sa.Copy {
+				installScriptExtLocation = sa.Link
+				break
+			}
+		}
+		if installScriptExtLocation != "" {
+			absExecPath, err := filepath.Abs(installScriptExtLocation)
+			if err != nil {
+				opErrorMsg = errDetermineAbsolutePath
+				opError = fmt.Errorf(opErrorMsg, err)
+				return false
+			}
+			execInstallScriptDir = filepath.Dir(absExecPath)
+			logger.Debugf("install script %s will be ran in its original folder", installScriptExtLocation)
+		}
+	}
+
+	// Monitor install progress
+	monitor, err := (&monitor{
+		status: hawkbit.StatusInstalling,
+		su:     su,
+		cid:    cid,
+		module: &hawkbit.SoftwareModuleID{Name: module.Name, Version: module.Version},
+	}).waitFor(execInstallScriptDir)
+	if err != nil {
+		logger.Debugf("fail to start progress monitor: %v", err)
 	}
 
 	// Start install script
-	logger.Debugf("[%s.%s] Run module install script", module.Name, module.Version)
-	if opError = f.installCommand.run(dir, "install"); opError != nil {
+	logger.Debugf("[%s.%s] Run module install script in %s", module.Name, module.Version, execInstallScriptDir)
+	if opError = f.installCommand.run(execInstallScriptDir, "install"); opError != nil {
 		opErrorMsg = errInstallScript
 		return false
 	}
@@ -189,14 +217,14 @@ Installing:
 	}
 
 	// Move the predefined installed dependencies
-	if opError = f.store.MoveInstalledDeps(dir, module.Metadata); opError != nil {
-		opErrorMsg = errInstalledDepsSsave
+	if opError = f.store.MoveInstalledDeps(execInstallScriptDir, module.Metadata); opError != nil {
+		opErrorMsg = errInstalledDepsSave
 		return false
 	}
 
 	// Installed
 	logger.Debugf("[%s.%s] Module installed", module.Name, module.Version)
-	setLastOS(su, newFileOS(dir, cid, module, hawkbit.StatusInstalled))
+	setLastOS(su, newFileOS(execInstallScriptDir, cid, module, hawkbit.StatusInstalled))
 
 	// Update installed dependencies
 	deps, err := f.store.LoadInstalledDeps()

@@ -30,6 +30,24 @@ const (
 	testTopicEntryID   = "thing.id"
 	testTopicNamespace = "my-namespace.id"
 	testTenantID       = "test-tenant-id"
+
+	flagBroker          = "broker"
+	flagUsername        = "username"
+	flagPassword        = "password"
+	flagStorageLocation = "storageLocation"
+	flagFeatureID       = "featureId"
+	flagModuleType      = "moduleType"
+	flagArtifactType    = "artifactType"
+	flagMode            = "mode"
+	flagLogFile         = "logFile"
+	flagLogLevel        = "logLevel"
+	flagLogFileSize     = "logFileSize"
+	flagLogFileCount    = "logFileCount"
+	flagLogFileMaxAge   = "logFileMaxAge"
+	flagCert            = "serverCert"
+	flagRetryCount      = "downloadRetryCount"
+	flagRetryInterval   = "downloadRetryInterval"
+	flagInstallPath     = "installPath"
 )
 
 // testConfig is used to provide mock data
@@ -38,11 +56,6 @@ type testConfig struct {
 	clientConnected bool
 	featureID       string
 }
-
-var (
-	supConfig *ScriptBasedSoftwareUpdatableConfig
-	edgeCfg   *edgeConfiguration
-)
 
 var testVersion = "TestVersion"
 
@@ -58,6 +71,20 @@ func assertPath(t *testing.T, name string, create bool) string {
 		}
 	}
 	return name
+}
+
+func connectFeature(t *testing.T, mc *mockedClient, feature *ScriptBasedSoftwareUpdatable, featureID string) error {
+	t.Helper()
+	supConfig := &ScriptBasedSoftwareUpdatableConfig{
+		Broker:     getDefaultFlagValue(t, flagBroker),
+		FeatureID:  featureID,
+		ModuleType: getDefaultFlagValue(t, flagModuleType),
+	}
+	edgeCfg := &edgeConfiguration{
+		DeviceID: model.NewNamespacedID(testTopicNamespace, testTopicEntryID).String(),
+		TenantID: testTenantID,
+	}
+	return feature.Connect(mc, supConfig, edgeCfg)
 }
 
 // mockScriptBasedSoftwareUpdatable create new ScriptBasedSoftwareUpdatable with mocked MQTT clients.
@@ -84,17 +111,7 @@ func mockScriptBasedSoftwareUpdatable(t *testing.T, tc *testConfig) (*ScriptBase
 		mqttClient: mc,
 	}
 
-	// Initialize mocked ScriptBasedSoftwareUpdatable
-	supConfig = &ScriptBasedSoftwareUpdatableConfig{
-		Broker:     getDefaultFlagValue(t, flagBroker),
-		FeatureID:  tc.featureID,
-		ModuleType: getDefaultFlagValue(t, flagModuleType),
-	}
-	edgeCfg = &edgeConfiguration{
-		DeviceID: model.NewNamespacedID(testTopicNamespace, testTopicEntryID).String(),
-		TenantID: testTenantID,
-	}
-	if err := feature.Connect(mc, supConfig, edgeCfg); err != nil { // calls feature.init(...)
+	if err := connectFeature(t, mc, feature, tc.featureID); err != nil { // calls feature.init(...)
 		return nil, nil, err
 	}
 
@@ -186,7 +203,7 @@ func (client *mockedClient) Publish(topic string, qos byte, retained bool, paylo
 	if env.Topic.Namespace != testTopicNamespace || env.Topic.EntityID != testTopicEntryID {
 		return token
 	}
-	// Validate its starting path.
+	// Valdiate its starting path.
 	if !strings.HasPrefix(env.Path, "/features/SoftwareUpdatable/properties/status/lastOperation") {
 		return token
 	}

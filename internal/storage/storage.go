@@ -37,6 +37,9 @@ var (
 type Progress func(percent int)
 type progressBytes func(bytes int64)
 
+// Validation represents a callback handler, that validates a module's artifacts, called prior to download.
+type Validation func() error
+
 // A Updatable represents a simplified SoftwareUpdateAction.
 type Updatable struct {
 	Operation     string    `json:"operation"`
@@ -66,6 +69,8 @@ type Artifact struct {
 	HashType  string `json:"hashType"`
 	HashValue string `json:"hashValue"`
 	Link      string `json:"link"`
+	Local     bool   `json:"local"`
+	Copy      bool   `json:"copy"`
 }
 
 // A Storage for Script-Based SoftwareUpdatable.
@@ -96,7 +101,7 @@ func NewStorage(location string) (*Storage, error) {
 		ModulesPath:       filepath.Join(location, "modules"),
 		done:              make(chan struct{}),
 	}
-	// Create Download directory.
+	// Create Downlaod directory.
 	if err := os.MkdirAll(this.DownloadPath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create download directory: %v", err)
 	}
@@ -213,7 +218,12 @@ func (st *Storage) ArchiveModule(dir string) error {
 
 // DownloadModule artifacts to local storage.
 func (st *Storage) DownloadModule(toDir string, module *Module, progress Progress, serverCert string,
-	retryCount int, retryInterval time.Duration) (err error) {
+	retryCount int, retryInterval time.Duration, validation Validation) (err error) {
+	if validation != nil {
+		if err := validation(); err != nil {
+			return err
+		}
+	}
 	logger.Debugf("Download module to directory: [%s]", toDir)
 	logger.Tracef("Module: %v", module)
 	if err = os.MkdirAll(toDir, 0755); err != nil {
@@ -225,7 +235,9 @@ func (st *Storage) DownloadModule(toDir string, module *Module, progress Progres
 	if progress != nil {
 		var totalSize int64
 		for _, sa := range module.Artifacts {
-			totalSize += int64(sa.Size)
+			if !sa.Local || sa.Copy {
+				totalSize += int64(sa.Size)
+			}
 		}
 		logger.Debugf("Total module size: %v", totalSize)
 
@@ -233,7 +245,10 @@ func (st *Storage) DownloadModule(toDir string, module *Module, progress Progres
 		var lProgress int
 		callback = func(bytes int64) {
 			totalWritten += bytes
-			cProgress := int(math.Round(float64(totalWritten) / float64(totalSize) * 100.0))
+			cProgress := 0
+			if totalSize > 0 {
+				cProgress = int(math.Round(float64(totalWritten) / float64(totalSize) * 100.0))
+			}
 			if lProgress != cProgress {
 				lProgress = cProgress
 				progress(cProgress)
@@ -241,11 +256,20 @@ func (st *Storage) DownloadModule(toDir string, module *Module, progress Progres
 		}
 	}
 
+	onlyLocalNoCopyArtifacts := true
 	for _, sa := range module.Artifacts {
-		if err = downloadArtifact(filepath.Join(toDir, sa.FileName), sa, callback, serverCert, retryCount, retryInterval,
-			st.done); err != nil {
+		if sa.Local && !sa.Copy {
+			logger.Infof("read-only local artifact - [%s]", sa.Link)
+			continue
+		}
+		onlyLocalNoCopyArtifacts = false
+		if err = downloadArtifact(filepath.Join(toDir, sa.FileName), sa, callback, serverCert, retryCount,
+			retryInterval, st.done); err != nil {
 			return err
 		}
+	}
+	if progress != nil && onlyLocalNoCopyArtifacts {
+		progress(100)
 	}
 	return err
 }

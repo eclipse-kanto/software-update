@@ -191,7 +191,7 @@ func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, 
 
 	statuses = append(statuses, pullStatusChanges(mc, postDisconnectEventCount)...)
 	waitDisconnect.Wait()
-	defer feature.Connect(mc, supConfig, edgeCfg)
+	defer connectFeature(t, mc, feature, getDefaultFlagValue(t, flagFeatureID))
 	if install {
 		checkInstallStatusEvents(statuses, t)
 	} else {

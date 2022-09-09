@@ -20,4 +20,5 @@ const (
 	HTTPS Protocol = "HTTPS"
 	FTP   Protocol = "FTP"
 	SFTP  Protocol = "SFTP"
+	FILE  Protocol = "FILE"
 )
