@@ -26,7 +26,8 @@ import (
 	"github.com/eclipse-kanto/software-update/internal/logger"
 )
 
-const PROTOCOL_FILE = "FILE"
+// ProtocolFile represents protocol for artifacts on local file system
+const ProtocolFile = "FILE"
 
 var (
 	// ErrCancel represents cancel operation error.

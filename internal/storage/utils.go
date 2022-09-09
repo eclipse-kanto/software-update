@@ -217,8 +217,8 @@ func toArtifact(sa *hawkbit.SoftwareArtifactAction, copy bool) (*Artifact, error
 		artifact.Link = sa.Download[hawkbit.HTTPS].URL
 	} else if sa.Download[hawkbit.HTTP] != nil {
 		artifact.Link = sa.Download[hawkbit.HTTP].URL
-	} else if sa.Download[PROTOCOL_FILE] != nil {
-		artifact.Link = sa.Download[PROTOCOL_FILE].URL
+	} else if sa.Download[ProtocolFile] != nil {
+		artifact.Link = sa.Download[ProtocolFile].URL
 		artifact.Local = true
 	} else {
 		return nil, fmt.Errorf("unknown or missing link for artifact %s", sa.Filename)
