@@ -47,7 +47,6 @@ const (
 	flagCert            = "serverCert"
 	flagRetryCount      = "downloadRetryCount"
 	flagRetryInterval   = "downloadRetryInterval"
-	flagInstallPath     = "installPath"
 )
 
 // testConfig is used to provide mock data
