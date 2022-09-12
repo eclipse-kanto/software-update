@@ -203,10 +203,6 @@ func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, 
 // TestScriptBasedDownloadAndInstallMixedResources tests ScriptBasedSoftwareUpdatable core functionality: init, install and download operations,
 // working with both downloadable and local resources
 func TestScriptBasedDownloadAndInstallMixedResources(t *testing.T) {
-	dataDir := "tempdata"
-	assertDirs(t, dataDir, true)
-	defer os.RemoveAll(dataDir)
-
 	// Prepare
 	storageDir := assertDirs(t, testDirFeature, false)
 	// Remove temporary directory at the end.
@@ -221,9 +217,9 @@ func TestScriptBasedDownloadAndInstallMixedResources(t *testing.T) {
 	defer feature.Disconnect(true)
 
 	a, aBody := "a.txt", "test"
-	aPath, aHash := createLocalArtifact(t, dataDir, a, aBody)
+	aPath, aHash := createLocalArtifact(t, storageDir, a, aBody)
 	b, bBody := "b.txt", "test"
-	bPath, bHash := createLocalArtifact(t, dataDir, b, bBody)
+	bPath, bHash := createLocalArtifact(t, storageDir, b, bBody)
 
 	// Prepare/Close simple HTTP server used to host testing artifacts
 	w := storage.NewTestHTTPServer(testDefaultHost, "", 0, t)
@@ -244,14 +240,14 @@ func TestScriptBasedDownloadAndInstallMixedResources(t *testing.T) {
 // TestScriptBasedDownloadAndInstallLocalResources tests ScriptBasedSoftwareUpdatable core functionality: init, install and download operations,
 // but working with local resources
 func TestScriptBasedDownloadAndInstallLocalResources(t *testing.T) {
-	tempDir := "tempdata"
-	assertDirs(t, tempDir, true)
-	defer os.RemoveAll(tempDir)
+	tmpDir := "testdata"
+	assertDirs(t, tmpDir, true)
+	defer os.RemoveAll(tmpDir)
 
 	installScriptAlias, installScriptBody := storage.GetTestInstallScript()
-	installScriptPath, installScriptHash := createLocalArtifact(t, tempDir, installScriptAlias, installScriptBody)
+	installScriptPath, installScriptHash := createLocalArtifact(t, tmpDir, installScriptAlias, installScriptBody)
 	localResourceAlias, localResourceBody := "local.txt", "test"
-	localResourcePath, localResourceHash := createLocalArtifact(t, tempDir, localResourceAlias, localResourceBody)
+	localResourcePath, localResourceHash := createLocalArtifact(t, tmpDir, localResourceAlias, localResourceBody)
 
 	t.Run("Test_without_copying_artifacts", func(t *testing.T) {
 		artifacts := []*hawkbit.SoftwareArtifactAction{
@@ -259,19 +255,19 @@ func TestScriptBasedDownloadAndInstallLocalResources(t *testing.T) {
 			convertLocalArtifact(getAbsolutePath(t, localResourcePath), localResourceAlias, localResourceHash, len(localResourceBody)),
 		}
 		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{}, artifacts, modeLax, "", true)
-		checkFileExistsWithContent(t, filepath.Join(tempDir, "status"), "message=My final message!") // install file was executed in correct folder
+		checkFileExistsWithContent(t, filepath.Join(tmpDir, "status"), "message=My final message!") // install file was executed in correct folder
 	})
 
-	t.Run("Test_with_correct_install_path", func(t *testing.T) {
+	t.Run("Test_with_correct_install_dirs", func(t *testing.T) {
 		artifacts := []*hawkbit.SoftwareArtifactAction{
 			convertLocalArtifact(installScriptAlias, installScriptAlias, installScriptHash, len(installScriptBody)),
 			convertLocalArtifact(getAbsolutePath(t, localResourcePath), localResourceAlias, localResourceHash, len(localResourceBody)),
 		}
-		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{tempDir}, artifacts, modeLax, "*", true)
-		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{tempDir}, artifacts, modeStrict, "*", true)
+		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{tmpDir}, artifacts, modeLax, "*", true)
+		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{tmpDir}, artifacts, modeStrict, "*", true)
 	})
 
-	t.Run("Test_with_no_install_path", func(t *testing.T) {
+	t.Run("Test_with_no_install_dirs", func(t *testing.T) {
 		artifacts := []*hawkbit.SoftwareArtifactAction{
 			convertLocalArtifact(installScriptPath, installScriptAlias, installScriptHash, len(installScriptBody)),
 			convertLocalArtifact(getAbsolutePath(t, localResourcePath), localResourceAlias, localResourceHash, len(localResourceBody)),
@@ -281,12 +277,12 @@ func TestScriptBasedDownloadAndInstallLocalResources(t *testing.T) {
 		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{}, artifacts, modeScoped, "*", false)
 	})
 
-	t.Run("Test_with_other_install_path", func(t *testing.T) {
+	t.Run("Test_with_incorrect_install_dirs", func(t *testing.T) {
 		artifacts := []*hawkbit.SoftwareArtifactAction{
 			convertLocalArtifact(getAbsolutePath(t, installScriptPath), installScriptAlias, installScriptHash, len(installScriptBody)),
 		}
 
-		installDirs := []string{filepath.Join(tempDir, "ip")}
+		installDirs := []string{filepath.Join(tmpDir, "test")}
 		assertDirs(t, installDirs[0], true)
 		testScriptBasedSoftwareUpdatableOperationsLocal(t, installDirs, artifacts, modeLax, "*", true)
 		testScriptBasedSoftwareUpdatableOperationsLocal(t, installDirs, artifacts, modeScoped, "*", false)
