@@ -280,17 +280,16 @@ func (token *mockedToken) Error() error {
 	return token.err
 }
 
-func createLocalArtifact(t *testing.T, dir, alias, body string) (file string, hash string) {
+func createLocalArtifact(t *testing.T, dir, alias, body string) (string, string) {
 	t.Helper()
 
-	file = filepath.Join(dir, alias)
+	file := filepath.Join(dir, alias)
 	if err := storage.WriteLn(file, body); err != nil {
 		t.Fatal("error writing to file", err)
 	}
 	hType := sha256.New()
 	hType.Write([]byte(body))
-	hash = hex.EncodeToString(hType.Sum(nil))
-	return
+	return file, hex.EncodeToString(hType.Sum(nil))
 }
 
 func convertLocalArtifact(path, name, hash string, len int) *hawkbit.SoftwareArtifactAction {

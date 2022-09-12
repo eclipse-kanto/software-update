@@ -258,7 +258,7 @@ func TestDownloadArchiveModule(t *testing.T) {
 		return validationErr
 	}
 	if err := store.DownloadModule(path, m, progress, "", 0, 0, validationFail); err != validationErr {
-		t.Errorf("expected validation error")
+		t.Errorf("unexpected validation error")
 	}
 
 	if err := store.DownloadModule(path, m, progress, "", 0, 0, nil); err != nil {
