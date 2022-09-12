@@ -29,8 +29,8 @@ const (
 	testCert              = "storage/testdata/valid_cert.pem"
 	testKey               = "storage/testdata/valid_key.pem"
 
-	noProgress = -12345
-	noMessage  = "no message"
+	noMessage       = "no message"
+	anyErrorMessage = "*"
 
 	statusParam   = "status"
 	progressParam = "progress"
@@ -154,16 +154,16 @@ func testScriptBasedSoftwareUpdatableOperations(noResume bool, t *testing.T) {
 	defer feature.Disconnect(true)
 
 	if noResume {
-		testDownloadInstall(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), t)
+		testDownloadInstall(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), true, "*", t)
 		feature.serverCert = testCert
-		testDownloadInstall(feature, mc, wSecure.GenerateSoftwareArtifacts(true, "install"), t)
+		testDownloadInstall(feature, mc, wSecure.GenerateSoftwareArtifacts(true, "install"), true, "*", t)
 	} else {
 		testDisconnect(feature, mc, w.GenerateSoftwareArtifacts(false, "install"), t)
 	}
 }
 
 func testDisconnect(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifacts []*hawkbit.SoftwareArtifactAction, t *testing.T) {
-	sua := prepareSoftwareUpdateAction(artifacts)
+	sua := prepareSoftwareUpdateAction(artifacts, "")
 	testDisconnectWhileRunningOperation(feature, mc, sua, false, t) // disconnect while downloading
 	testDisconnectWhileRunningOperation(feature, mc, sua, true, t)  // disconnect while installing
 }
@@ -177,6 +177,7 @@ func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, 
 	} else {
 		feature.downloadHandler(sua, feature.su)
 	}
+	// only 1 artifact here
 	preDisconnectEventCount := 2  // STARTED, DOWNLOADING
 	postDisconnectEventCount := 3 // DOWNLOADING(100)/INSTALLING(100), DOWNLOADED/INSTALLED, FINISHED_SUCCESS
 	if install {
@@ -193,10 +194,121 @@ func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, 
 	waitDisconnect.Wait()
 	defer connectFeature(t, mc, feature, getDefaultFlagValue(t, flagFeatureID))
 	if install {
-		checkInstallStatusEvents(statuses, t)
+		checkInstallStatusEvents(0, statuses, t)
 	} else {
-		checkDownloadStatusEvents(statuses, t)
+		checkDownloadStatusEvents(0, statuses, t)
 	}
+}
+
+// TestScriptBasedDownloadAndInstallMixedResources tests ScriptBasedSoftwareUpdatable core functionality: init, install and download operations,
+// working with both downloadable and local resources
+func TestScriptBasedDownloadAndInstallMixedResources(t *testing.T) {
+	dataDir := "tempdata"
+	assertDirs(t, dataDir, true)
+	defer os.RemoveAll(dataDir)
+
+	// Prepare
+	storageDir := assertDirs(t, testDirFeature, false)
+	// Remove temporary directory at the end.
+	defer os.RemoveAll(storageDir)
+
+	feature, mc, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
+		clientConnected: true, featureID: getDefaultFlagValue(t, flagFeatureID), storageLocation: storageDir, mode: modeLax,
+	})
+	if err != nil {
+		t.Fatalf("failed to initialize ScriptBasedSoftwareUpdatable: %v", err)
+	}
+	defer feature.Disconnect(true)
+
+	a, aBody := "a.txt", "test"
+	aPath, aHash := createLocalArtifact(t, dataDir, a, aBody)
+	b, bBody := "b.txt", "test"
+	bPath, bHash := createLocalArtifact(t, dataDir, b, bBody)
+
+	// Prepare/Close simple HTTP server used to host testing artifacts
+	w := storage.NewTestHTTPServer(testDefaultHost, "", 0, t)
+	w.Host(true, false, "", "")
+	w.AddInstallScript()
+	defer w.Close()
+
+	installScript := w.GenerateSoftwareArtifacts(false, "install")
+	artifacts := []*hawkbit.SoftwareArtifactAction{
+		convertLocalArtifact(aPath, a, aHash, len(aBody)),
+		convertLocalArtifact(bPath, b, bHash, len(bBody)),
+		installScript[0],
+	}
+
+	testDownloadInstall(feature, mc, artifacts, true, b, t)
+}
+
+// TestScriptBasedDownloadAndInstallLocalResources tests ScriptBasedSoftwareUpdatable core functionality: init, install and download operations,
+// but working with local resources
+func TestScriptBasedDownloadAndInstallLocalResources(t *testing.T) {
+	tempDir := "tempdata"
+	assertDirs(t, tempDir, true)
+	defer os.RemoveAll(tempDir)
+
+	installScriptAlias, installScriptBody := storage.GetTestInstallScript()
+	installScriptPath, installScriptHash := createLocalArtifact(t, tempDir, installScriptAlias, installScriptBody)
+	localResourceAlias, localResourceBody := "local.txt", "test"
+	localResourcePath, localResourceHash := createLocalArtifact(t, tempDir, localResourceAlias, localResourceBody)
+
+	t.Run("Test_without_copying_artifacts", func(t *testing.T) {
+		artifacts := []*hawkbit.SoftwareArtifactAction{
+			convertLocalArtifact(installScriptPath, installScriptAlias, installScriptHash, len(installScriptBody)),
+			convertLocalArtifact(getAbsolutePath(t, localResourcePath), localResourceAlias, localResourceHash, len(localResourceBody)),
+		}
+		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{}, artifacts, modeLax, "", true)
+		checkFileExistsWithContent(t, filepath.Join(tempDir, "status"), "message=My final message!") // install file was executed in correct folder
+	})
+
+	t.Run("Test_with_correct_install_path", func(t *testing.T) {
+		artifacts := []*hawkbit.SoftwareArtifactAction{
+			convertLocalArtifact(installScriptAlias, installScriptAlias, installScriptHash, len(installScriptBody)),
+			convertLocalArtifact(getAbsolutePath(t, localResourcePath), localResourceAlias, localResourceHash, len(localResourceBody)),
+		}
+		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{tempDir}, artifacts, modeLax, "*", true)
+		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{tempDir}, artifacts, modeStrict, "*", true)
+	})
+
+	t.Run("Test_with_no_install_path", func(t *testing.T) {
+		artifacts := []*hawkbit.SoftwareArtifactAction{
+			convertLocalArtifact(installScriptPath, installScriptAlias, installScriptHash, len(installScriptBody)),
+			convertLocalArtifact(getAbsolutePath(t, localResourcePath), localResourceAlias, localResourceHash, len(localResourceBody)),
+		}
+		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{}, artifacts, modeLax, "*", true)
+		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{}, artifacts, modeStrict, "*", false)
+		testScriptBasedSoftwareUpdatableOperationsLocal(t, []string{}, artifacts, modeScoped, "*", false)
+	})
+
+	t.Run("Test_with_other_install_path", func(t *testing.T) {
+		artifacts := []*hawkbit.SoftwareArtifactAction{
+			convertLocalArtifact(getAbsolutePath(t, installScriptPath), installScriptAlias, installScriptHash, len(installScriptBody)),
+		}
+
+		installDirs := []string{filepath.Join(tempDir, "ip")}
+		assertDirs(t, installDirs[0], true)
+		testScriptBasedSoftwareUpdatableOperationsLocal(t, installDirs, artifacts, modeLax, "*", true)
+		testScriptBasedSoftwareUpdatableOperationsLocal(t, installDirs, artifacts, modeScoped, "*", false)
+	})
+}
+
+func testScriptBasedSoftwareUpdatableOperationsLocal(t *testing.T, installDirs []string,
+	artifacts []*hawkbit.SoftwareArtifactAction, mode string, copyArtifacts string, expectedSuccess bool) {
+	// Prepare
+	dir := assertDirs(t, testDirFeature, false)
+	// Remove temporary directory at the end.
+	defer os.RemoveAll(dir)
+
+	feature, mc, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
+		clientConnected: true, featureID: getDefaultFlagValue(t, flagFeatureID), storageLocation: dir,
+		installDirs: installDirs, mode: mode})
+	if err != nil {
+		t.Fatalf("failed to initialize ScriptBasedSoftwareUpdatable: %v", err)
+	}
+	defer feature.Disconnect(true)
+
+	testDownloadInstall(feature, mc, artifacts, expectedSuccess, copyArtifacts, t)
 }
 
 func pullStatusChanges(mc *mockedClient, expectedCount int) []interface{} {
@@ -204,58 +316,102 @@ func pullStatusChanges(mc *mockedClient, expectedCount int) []interface{} {
 	for i := 0; i < expectedCount; i++ {
 		lo := mc.pullLastOperationStatus()
 		statuses = append(statuses, lo)
+		if lo["status"] == string(hawkbit.StatusFinishedSuccess) || lo["status"] == string(hawkbit.StatusFinishedError) {
+			break
+		}
 	}
 	return statuses
 }
 
-func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifacts []*hawkbit.SoftwareArtifactAction, t *testing.T) {
-	sua := prepareSoftwareUpdateAction(artifacts)
+func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient, artifacts []*hawkbit.SoftwareArtifactAction,
+	expectedSuccess bool, copyArtifacts string, t *testing.T) {
+	sua := prepareSoftwareUpdateAction(artifacts, copyArtifacts)
+
+	extraDownloadingEventsCount := getCopiedArtifactsCount(artifacts, copyArtifacts)
+	if extraDownloadingEventsCount > 0 {
+		extraDownloadingEventsCount-- // 1 artifact expected in default case
+	}
 
 	// Try to execute a simple download operation.
 	feature.downloadHandler(sua, feature.su)
 
-	statuses := pullStatusChanges(mc, 5) // STARTED, DOWNLOADING, DOWNLOADING(100), DOWNLOADED, FINISHED_SUCCESS
-	checkDownloadStatusEvents(statuses, t)
+	statuses := pullStatusChanges(mc, 5+extraDownloadingEventsCount) // STARTED, DOWNLOADING, DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED, FINISHED_SUCCESS
+	if expectedSuccess {
+		checkDownloadStatusEvents(extraDownloadingEventsCount, statuses, t)
+		if copyArtifacts == "" {
+			if !checkNoFilesCopied(t, filepath.Join(testDirFeature, "download", "0", "0"), true) {
+				checkNoFilesCopied(t, filepath.Join(testDirFeature, "modules", "0"), false)
+			}
+		}
+	} else {
+		checkDownloadFailedStatusEvents(statuses, t)
+	}
 
 	// Try to execute a simple install operation.
 	feature.installHandler(sua, feature.su)
 
-	statuses = pullStatusChanges(mc, 8) // STARTED, DOWNLOADING, DOWNLOADING(100), DOWNLOADED,
+	statuses = pullStatusChanges(mc, 8+extraDownloadingEventsCount) // STARTED, DOWNLOADING, DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED,
 	// INSTALLING, INSTALLING(100), INSTALLED, FINISHED_SUCCESS
-	checkInstallStatusEvents(statuses, t)
-}
-
-func createStatus(status hawkbit.Status, progress float64, message string) map[string]interface{} {
-	return map[string]interface{}{
-		statusParam:   string(status),
-		progressParam: progress,
-		messageParam:  message,
+	if expectedSuccess {
+		checkInstallStatusEvents(extraDownloadingEventsCount, statuses, t)
+	} else {
+		checkDownloadFailedStatusEvents(statuses, t)
 	}
 }
 
-func checkDownloadStatusEvents(actualStatuses []interface{}, t *testing.T) {
+func createStatus(status hawkbit.Status, progress func(float64) bool, message string) map[string]interface{} {
+	result := make(map[string]interface{})
+	result[statusParam] = string(status)
+	result[messageParam] = message
+	if progress != nil {
+		result[progressParam] = progress
+	}
+	return result
+}
+
+func checkDownloadFailedStatusEvents(actualStatuses []interface{}, t *testing.T) {
 	var expectedStatuses []interface{}
 	expectedStatuses = append(expectedStatuses,
-		createStatus(hawkbit.StatusStarted, noProgress, noMessage),
-		createStatus(hawkbit.StatusDownloading, noProgress, noMessage),
-		createStatus(hawkbit.StatusDownloading, 100.0, noMessage),
-		createStatus(hawkbit.StatusDownloaded, 100.0, noMessage),
-		createStatus(hawkbit.StatusFinishedSuccess, noProgress, noMessage),
+		createStatus(hawkbit.StatusStarted, nil, noMessage),
+		createStatus(hawkbit.StatusDownloading, nil, noMessage),
+		createStatus(hawkbit.StatusFinishedError, nil, anyErrorMessage),
 	)
 	checkStatusEvents(expectedStatuses, actualStatuses, t)
 }
 
-func checkInstallStatusEvents(actualStatuses []interface{}, t *testing.T) {
+func checkDownloadStatusEvents(extraDownloadingEventsCount int, actualStatuses []interface{}, t *testing.T) {
 	var expectedStatuses []interface{}
 	expectedStatuses = append(expectedStatuses,
-		createStatus(hawkbit.StatusStarted, noProgress, noMessage),
-		createStatus(hawkbit.StatusDownloading, noProgress, noMessage),
-		createStatus(hawkbit.StatusDownloading, 100.0, noMessage),
-		createStatus(hawkbit.StatusDownloaded, 100.0, noMessage),
-		createStatus(hawkbit.StatusInstalling, noProgress, noMessage),
-		createStatus(hawkbit.StatusInstalling, noProgress, "My final message!"),
-		createStatus(hawkbit.StatusInstalled, noProgress, "My final message!"),
-		createStatus(hawkbit.StatusFinishedSuccess, noProgress, "My final message!"),
+		createStatus(hawkbit.StatusStarted, nil, noMessage),
+		createStatus(hawkbit.StatusDownloading, nil, noMessage),
+	)
+	for i := 0; i < extraDownloadingEventsCount; i++ {
+		expectedStatuses = append(expectedStatuses, createStatus(hawkbit.StatusDownloading, partialDownload, noMessage))
+	}
+	expectedStatuses = append(expectedStatuses,
+		createStatus(hawkbit.StatusDownloading, completeDownload, noMessage),
+		createStatus(hawkbit.StatusDownloaded, completeDownload, noMessage),
+		createStatus(hawkbit.StatusFinishedSuccess, nil, noMessage),
+	)
+	checkStatusEvents(expectedStatuses, actualStatuses, t)
+}
+
+func checkInstallStatusEvents(extraDownloadingEventsCount int, actualStatuses []interface{}, t *testing.T) {
+	var expectedStatuses []interface{}
+	expectedStatuses = append(expectedStatuses,
+		createStatus(hawkbit.StatusStarted, nil, noMessage),
+		createStatus(hawkbit.StatusDownloading, nil, noMessage),
+	)
+	for i := 0; i < extraDownloadingEventsCount; i++ {
+		expectedStatuses = append(expectedStatuses, createStatus(hawkbit.StatusDownloading, partialDownload, noMessage))
+	}
+	expectedStatuses = append(expectedStatuses,
+		createStatus(hawkbit.StatusDownloading, completeDownload, noMessage),
+		createStatus(hawkbit.StatusDownloaded, completeDownload, noMessage),
+		createStatus(hawkbit.StatusInstalling, nil, noMessage),
+		createStatus(hawkbit.StatusInstalling, nil, "My final message!"),
+		createStatus(hawkbit.StatusInstalled, nil, "My final message!"),
+		createStatus(hawkbit.StatusFinishedSuccess, nil, "My final message!"),
 	)
 	checkStatusEvents(expectedStatuses, actualStatuses, t)
 }
@@ -269,10 +425,10 @@ func checkStatusEvents(expectedStatuses []interface{}, actualStatuses []interfac
 		expected := el.(map[string]interface{})
 		actual := actualStatuses[i].(map[string]interface{})
 		if expected[statusParam] != actual[statusParam] {
-			t.Fatalf("received unexpected lastOperation status: %s != %s(actual)", expected[statusParam], actual[statusParam])
+			t.Fatalf("received unexpected lastOperation status: %v != %v(actual)", expected[statusParam], actual[statusParam])
 		}
-		checkStatusParameter(expected[progressParam].(float64), actual, progressParam,
-			expected[progressParam].(float64) == noProgress, t)
+		checkStatusParameter(expected[progressParam], actual, progressParam,
+			expected[progressParam] == nil, t)
 		checkStatusParameter(expected[messageParam], actual, messageParam, expected[messageParam] == noMessage, t)
 	}
 }
@@ -284,22 +440,26 @@ func checkStatusParameter(expectedParamValue interface{}, actualStatus map[strin
 		if noValue {
 			t.Fatalf("no %s expected in payload: %v", name, actualStatus)
 		}
-		if expectedParamValue != receivedValue {
-			t.Fatalf("received unexpected lastOperation %s: %s != %s", name, receivedValue, expectedParamValue)
+		if checkProgressFunc, ok := expectedParamValue.(func(float64) bool); ok {
+			if !checkProgressFunc(receivedValue.(float64)) {
+				t.Fatalf("received unacceptable lastOperation %s: %v", name, receivedValue)
+			}
+		} else if expectedParamValue != anyErrorMessage && expectedParamValue != receivedValue {
+			t.Fatalf("received unexpected lastOperation %s: %v != %v", name, receivedValue, expectedParamValue)
 		}
 	} else if !noValue {
 		t.Fatalf("no %s found in payload: %v", name, actualStatus)
 	}
 }
 
-func prepareSoftwareUpdateAction(artifacts []*hawkbit.SoftwareArtifactAction) *hawkbit.SoftwareUpdateAction {
+func prepareSoftwareUpdateAction(artifacts []*hawkbit.SoftwareArtifactAction, copyArtifacts string) *hawkbit.SoftwareUpdateAction {
 	// Prepare simple software update action.
 	return &hawkbit.SoftwareUpdateAction{
 		CorrelationID: "test-correlation-id",
 		SoftwareModules: []*hawkbit.SoftwareModuleAction{{
 			SoftwareModule: &hawkbit.SoftwareModuleID{Name: "test", Version: "1.0.0"},
 			Artifacts:      artifacts,
-			Metadata:       map[string]string{"artifact-type": "plane"},
+			Metadata:       map[string]string{"artifact-type": "plane", "copy-artifacts": copyArtifacts},
 		}},
 	}
 }

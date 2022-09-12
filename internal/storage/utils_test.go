@@ -20,10 +20,21 @@ import (
 	"github.com/eclipse-kanto/software-update/hawkbit"
 )
 
-type ah struct {
-	Hash     hawkbit.Hash
-	Protocol hawkbit.Protocol
+type artifactData struct {
+	hash     hawkbit.Hash
+	protocol hawkbit.Protocol
+	local    bool
+	copy     bool
 }
+
+var (
+	partialDownload = func(progress int) bool {
+		return progress > 0 && progress < 100
+	}
+	completeDownload = func(progress int) bool {
+		return progress == 100
+	}
+)
 
 // ----- ReadLn & WriteLn ----- ----- ----- ----- ----- ----- ----- ----- -----
 
@@ -300,29 +311,51 @@ func TestToModule(t *testing.T) {
 	a2.Checksums[hawkbit.SHA1] = "sha1-value"
 	a2.Download[hawkbit.HTTP] = &hawkbit.Links{URL: "http://test.me", MD5URL: ""}
 
-	expected := hawkbit.SoftwareModuleAction{
-		SoftwareModule: &hawkbit.SoftwareModuleID{Name: "name", Version: "1.0.0"},
-		Artifacts:      []*hawkbit.SoftwareArtifactAction{a1, a2}}
-
-	// 1. Validate with two correct artifacts
-	actual, err := toModule(expected)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	eah := []ah{
-		{Hash: hawkbit.MD5, Protocol: hawkbit.HTTPS},
-		{Hash: hawkbit.SHA1, Protocol: hawkbit.HTTP},
-	}
-	validateModule(expected, actual, eah, t)
-
-	// 2. Validate with two correct artifacts and one wrong artifact
 	a3 := &hawkbit.SoftwareArtifactAction{
 		Filename:  "test3.txt",
 		Size:      333,
 		Checksums: make(map[hawkbit.Hash]string),
 		Download:  make(map[hawkbit.Protocol]*hawkbit.Links),
 	}
-	expected.Artifacts = append(expected.Artifacts, a3)
+	a3.Checksums[hawkbit.SHA1] = "sha1-value"
+	a3.Download[ProtocolFile] = &hawkbit.Links{URL: "/var/tmp/test3.txt", MD5URL: ""}
+
+	a4 := &hawkbit.SoftwareArtifactAction{
+		Filename:  "test4.txt",
+		Size:      444,
+		Checksums: make(map[hawkbit.Hash]string),
+		Download:  make(map[hawkbit.Protocol]*hawkbit.Links),
+	}
+	a4.Checksums[hawkbit.SHA1] = "sha1-value"
+	a4.Download[ProtocolFile] = &hawkbit.Links{URL: "/var/tmp/test4.txt", MD5URL: ""}
+
+	expected := hawkbit.SoftwareModuleAction{
+		SoftwareModule: &hawkbit.SoftwareModuleID{Name: "name", Version: "1.0.0"},
+		Artifacts:      []*hawkbit.SoftwareArtifactAction{a1, a2, a3, a4},
+		Metadata:       map[string]string{"copy-artifacts": "test3.txt,invalid.txt"},
+	}
+
+	// 1. Validate with two correct artifacts
+	actual, err := toModule(expected)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	eah := []artifactData{
+		{hash: hawkbit.MD5, protocol: hawkbit.HTTPS, local: false, copy: false},
+		{hash: hawkbit.SHA1, protocol: hawkbit.HTTP, local: false, copy: false},
+		{hash: hawkbit.SHA1, protocol: ProtocolFile, local: true, copy: true},
+		{hash: hawkbit.SHA1, protocol: ProtocolFile, local: true, copy: false},
+	}
+	validateModule(expected, actual, eah, t)
+
+	// 2. Validate with two correct artifacts and one wrong artifact
+	a5 := &hawkbit.SoftwareArtifactAction{
+		Filename:  "test5.txt",
+		Size:      555,
+		Checksums: make(map[hawkbit.Hash]string),
+		Download:  make(map[hawkbit.Protocol]*hawkbit.Links),
+	}
+	expected.Artifacts = append(expected.Artifacts, a5)
 	if _, err = toModule(expected); err == nil {
 		t.Errorf("an error was expected for wrong artifact")
 	}
@@ -344,44 +377,44 @@ func TestToArtifact(t *testing.T) {
 	expected.Download[hawkbit.HTTP] = &hawkbit.Links{URL: "http://test.me", MD5URL: ""}
 
 	// 1. Validate with MD5 and HTTP
-	actual, err := toArtifact(expected, true)
+	actual, err := toArtifact(expected, false)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	validateArtifact(expected, actual, ah{Hash: hawkbit.MD5, Protocol: hawkbit.HTTP}, t)
+	validateArtifact(expected, actual, artifactData{hash: hawkbit.MD5, protocol: hawkbit.HTTP}, t)
 
 	// 2. Validate with SHA1 and HTTPS
 	expected.Checksums[hawkbit.SHA1] = "sha1-value"
 	expected.Download[hawkbit.HTTPS] = &hawkbit.Links{URL: "https://test.me", MD5URL: ""}
-	actual, err = toArtifact(expected, true)
+	actual, err = toArtifact(expected, false)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	validateArtifact(expected, actual, ah{Hash: hawkbit.SHA1, Protocol: hawkbit.HTTPS}, t)
+	validateArtifact(expected, actual, artifactData{hash: hawkbit.SHA1, protocol: hawkbit.HTTPS}, t)
 
 	// 3. Validate with SHA256 and HTTPS
 	expected.Checksums[hawkbit.SHA256] = "sha256-value"
-	actual, err = toArtifact(expected, true)
+	actual, err = toArtifact(expected, false)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	validateArtifact(expected, actual, ah{Hash: hawkbit.SHA256, Protocol: hawkbit.HTTPS}, t)
+	validateArtifact(expected, actual, artifactData{hash: hawkbit.SHA256, protocol: hawkbit.HTTPS}, t)
 
 	// 4. Validate for unknown/missing Hash
 	expected.Checksums = make(map[hawkbit.Hash]string)
-	if _, err = toArtifact(expected, true); err == nil {
+	if _, err = toArtifact(expected, false); err == nil {
 		t.Errorf("an error was expected for unknown or missing hash")
 	}
 
 	// 5. Validate for unknown/missing link
 	expected.Download = make(map[hawkbit.Protocol]*hawkbit.Links)
 	expected.Download[hawkbit.FTP] = &hawkbit.Links{URL: "ftp://test.me", MD5URL: ""}
-	if _, err = toArtifact(expected, true); err == nil {
+	if _, err = toArtifact(expected, false); err == nil {
 		t.Errorf("an error was expected for unknown or missing link")
 	}
 }
 
-func validateModule(expected hawkbit.SoftwareModuleAction, actual *Module, ahs []ah, t *testing.T) {
+func validateModule(expected hawkbit.SoftwareModuleAction, actual *Module, ahs []artifactData, t *testing.T) {
 	if expected.SoftwareModule.Name != actual.Name {
 		t.Errorf("wrong module name: %s != %s", expected.SoftwareModule.Name, actual.Name)
 	}
@@ -396,21 +429,24 @@ func validateModule(expected hawkbit.SoftwareModuleAction, actual *Module, ahs [
 	}
 }
 
-func validateArtifact(expected *hawkbit.SoftwareArtifactAction, actual *Artifact, ah ah, t *testing.T) {
+func validateArtifact(expected *hawkbit.SoftwareArtifactAction, actual *Artifact, ah artifactData, t *testing.T) {
 	if expected.Filename != actual.FileName {
 		t.Errorf("wrong artifact file name: %s != %s", expected.Filename, actual.FileName)
 	}
 	if expected.Size != actual.Size {
 		t.Errorf("wrong artifact size: %v != %v", expected.Size, actual.Size)
 	}
-	if string(ah.Hash) != actual.HashType {
-		t.Errorf("wrong artifact hash type: %v != %v", string(ah.Hash), actual.HashType)
+	if string(ah.hash) != actual.HashType {
+		t.Errorf("wrong artifact hash type: %v != %v", string(ah.hash), actual.HashType)
 	}
-	if expected.Checksums[ah.Hash] != actual.HashValue {
-		t.Errorf("wrong artifact hash value: %v != %v", expected.Checksums[ah.Hash], actual.HashValue)
+	if expected.Checksums[ah.hash] != actual.HashValue {
+		t.Errorf("wrong artifact hash value: %v != %v", expected.Checksums[ah.hash], actual.HashValue)
 	}
-	if expected.Download[ah.Protocol].URL != actual.Link {
-		t.Errorf("wrong artifact link: %v != %v", expected.Download[ah.Protocol], actual.Link)
+	if expected.Download[ah.protocol].URL != actual.Link {
+		t.Errorf("wrong artifact link: %v != %v", expected.Download[ah.protocol], actual.Link)
+	}
+	if ah.copy != actual.Copy {
+		t.Errorf("wrong artifact copy policy: %v != %v", ah.copy, actual.Copy)
 	}
 }
 

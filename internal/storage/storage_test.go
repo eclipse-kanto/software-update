@@ -239,7 +239,7 @@ func TestDownloadArchiveModule(t *testing.T) {
 	}
 	existence(filepath.Join(path, art.FileName), true, "[initial download]", t)
 
-	// 2. Archvie module.
+	// 2. Archive module.
 	if err := WriteLn(filepath.Join(path, InternalStatusName), m.Name+":"+m.Version); err != nil {
 		t.Fatalf("fail to write module id: %v", err)
 	}
@@ -251,6 +251,16 @@ func TestDownloadArchiveModule(t *testing.T) {
 	// 3. Download previous module with progress.
 	path = filepath.Join(store.DownloadPath, "0", "1")
 	progress := func(percent int) { /* Do nothing. */ }
+
+	// Download with validation error
+	validationErr := fmt.Errorf("test validation error")
+	validationFail := func() error {
+		return validationErr
+	}
+	if err := store.DownloadModule(path, m, progress, "", 0, 0, validationFail); err != validationErr {
+		t.Errorf("expected validation error")
+	}
+
 	if err := store.DownloadModule(path, m, progress, "", 0, 0, nil); err != nil {
 		t.Errorf("fail to download module: %v", err)
 	}

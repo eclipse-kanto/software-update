@@ -223,6 +223,39 @@ func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T
 	}
 }
 
+// TestDownloadToFileLocalLink tests downloadToFile function, using local files as artifact links.
+func TestDownloadToFileLocalLink(t *testing.T) {
+	size := int64(65536)
+	name := "local.txt"
+	file, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		t.Fatal("failed to create temp file", err)
+	}
+	defer os.Remove(name)
+	write(file, size, false)
+	file.Close()
+	testDownloadToFile([]*Artifact{
+		{ // A Local Artifact with MD5 checksum.
+			FileName: name, Size: int(size), Link: name,
+			HashType:  "MD5",
+			HashValue: "ab2ce340d36bbaafe17965a3a2c6ed5b",
+			Local:     true,
+		},
+		{ // A Local Artifact with SHA1 checksum.
+			FileName: name, Size: int(size), Link: name,
+			HashType:  "SHA1",
+			HashValue: "cd3848697cb42f5be9902f6523ec516d21a8c677",
+			Local:     true,
+		},
+		{ // A Local Artifact with SHA256 checksum.
+			FileName: name, Size: int(size), Link: name,
+			HashType:  "SHA256",
+			HashValue: "4eefb9a7a40a8b314b586a00f307157043c0bbe4f59fa39cba88773680758bc3",
+			Local:     true,
+		},
+	}, "", "", t)
+}
+
 // TestDownloadToFileError tests downloadToFile function for some edge cases.
 func TestDownloadToFileError(t *testing.T) {
 	// Prepare
