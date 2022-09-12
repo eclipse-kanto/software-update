@@ -211,7 +211,7 @@ func getFileInput(location string, offset int64) (io.ReadCloser, bool, error) {
 	if offset > 0 {
 		_, err = file.Seek(offset, 0)
 	}
-	return file, err == nil, nil
+	return file, err == nil, nil // if err != nil, resume is not supported
 }
 
 func requestDownload(link string, offset int64, serverCert string) (*http.Response, error) {

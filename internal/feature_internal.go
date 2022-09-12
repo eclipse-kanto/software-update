@@ -214,7 +214,7 @@ func (f *ScriptBasedSoftwareUpdatable) validateLocalArtifacts(module *storage.Mo
 		if !sa.Local {
 			continue
 		}
-		location, err := f.resolveLocalArtifacts(sa.Link)
+		location, err := f.resolveLocalArtifact(sa.Link)
 		if err != nil {
 			return err
 		}

@@ -31,7 +31,7 @@ func isDir(dir string) bool {
 	return false
 }
 
-func (f *ScriptBasedSoftwareUpdatable) resolveLocalArtifacts(link string) (string, error) {
+func (f *ScriptBasedSoftwareUpdatable) resolveLocalArtifact(link string) (string, error) {
 	if f.accessMode != modeLax && len(f.installDirs) == 0 {
 		return link, fmt.Errorf("no install directories specified, while using `strict` access mode")
 	}
@@ -67,10 +67,10 @@ func (f *ScriptBasedSoftwareUpdatable) checkAccess(location, allowedPath string)
 	targetDir = filepath.Dir(targetAbs)
 
 	if allowedDir, err = filepath.Abs(allowedPath); err != nil {
-		return fmt.Errorf("invalid install path directory(cannot determine absolute path) - [%s]", allowedPath)
+		return fmt.Errorf("invalid install directory path(cannot determine absolute path) - [%s]", allowedPath)
 	}
 	if !isDir(allowedDir) {
-		return fmt.Errorf("invalid install path location(not a directory) - [%s]", allowedDir)
+		return fmt.Errorf("invalid install directory path(not a directory) - [%s]", allowedDir)
 	}
 
 	if (f.accessMode == modeStrict && targetDir == allowedDir) || (f.accessMode == modeScoped && isSubDir(targetDir, allowedDir)) {
@@ -86,9 +86,7 @@ func isSubDir(sub string, dir string) bool {
 		if dir == p {
 			return true
 		}
-
 		last = p
 	}
-
 	return false
 }

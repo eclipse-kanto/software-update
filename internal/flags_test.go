@@ -53,7 +53,7 @@ func TestInstallCommandFlag(t *testing.T) {
 	assertInstallCommand(t, expectedInstallCMD, expectedInstallArgs)
 }
 
-// TestInstallDirsCommandFlag tests the initialization with flags when install path is provided
+// TestInstallDirsCommandFlag tests the initialization with flags when install directories are provided
 // with flag, but also in config file. Assert that the flag has higher priority.
 func TestInstallDirsCommandFlag(t *testing.T) {
 	notExpectedDir := "dir1"
@@ -332,7 +332,7 @@ func TestInvalidAccessModeFlag(t *testing.T) {
 	setFlags([]string{c(flagMode, "test"), c(flagFeatureID, "id")})
 	sc, _, err := InitFlags(testVersion)
 	if err != nil {
-		t.Errorf("not expecting error when initializing flags with featureId: %v", err)
+		t.Errorf("not expecting error when initializing flags with invalid access mode: %v", err)
 	}
 	if err = sc.Validate(); err == nil {
 		t.Fatal("expecting error when validating configuration with invalid access mode flag")
@@ -400,18 +400,18 @@ func assertInstallCommand(t *testing.T, expectedInstallCMD string, expectedInsta
 	}
 }
 
-// assertInstallDirs verifies the result when initializing flags with install path,
-// which is specified with config file or flag
+// assertInstallDirs verifies the result when initializing flags with install directories,
+// which are specified with config file or flag
 func assertInstallDirs(t *testing.T, expectedInstallDir string) {
 	sc, _, err := InitFlags(testVersion)
 	if err != nil {
 		t.Errorf("not expecting error when initializing with install config: %v", err)
 	}
 	if len(sc.InstallDirs.args) != 1 {
-		t.Error("expecting install path to be set")
+		t.Error("expecting install directories to be set")
 	}
 	if sc.InstallDirs.args[0] != expectedInstallDir {
-		t.Errorf("unmatching install path args, expected %v, actual %v", expectedInstallDir, sc.InstallCommand.args)
+		t.Errorf("unmatching install directories args, expected %v, actual %v", expectedInstallDir, sc.InstallCommand.args)
 	}
 }
 
