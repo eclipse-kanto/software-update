@@ -40,7 +40,7 @@ const (
 // TestScriptBasedConstructor tests NewScriptBasedSU with wrong broker URL.
 func TestScriptBasedConstructor(t *testing.T) {
 	// Prepare
-	dir := assertPath(t, testDirFeature, true)
+	dir := assertDirs(t, testDirFeature, true)
 	// Remove temporary directory at the end.
 	defer os.RemoveAll(dir)
 
@@ -65,7 +65,7 @@ func TestScriptBasedConstructor(t *testing.T) {
 // when invalid config field featureID is provided to HawkBit
 func TestNewScriptBasedInitHawkBitValidation(t *testing.T) {
 	// Prepare
-	dir := assertPath(t, testDirFeature, false)
+	dir := assertDirs(t, testDirFeature, false)
 	// Remove temporary directory at the end.
 	defer os.RemoveAll(dir)
 
@@ -81,7 +81,7 @@ func TestNewScriptBasedInitHawkBitValidation(t *testing.T) {
 // with invalid mandatory field in dependencies on load
 func TestScriptBasedInitLoadDependencies(t *testing.T) {
 	// Prepare
-	dir := assertPath(t, testDirFeature, false)
+	dir := assertDirs(t, testDirFeature, false)
 	// Remove temporary directory at the end.
 	defer os.RemoveAll(dir)
 
@@ -105,7 +105,7 @@ func TestScriptBasedInitLoadDependencies(t *testing.T) {
 // TestScriptBasedInit tests the ScriptBasedSoftwareUpdatable initialization when the client is not connected
 func TestScriptBasedInit(t *testing.T) {
 	// Prepare
-	dir := assertPath(t, testDirFeature, false)
+	dir := assertDirs(t, testDirFeature, false)
 	// Remove temporary directory at the end.
 	defer os.RemoveAll(dir)
 
@@ -130,7 +130,7 @@ func TestScriptBasedDownloadAndInstallResume(t *testing.T) {
 
 func testScriptBasedSoftwareUpdatableOperations(noResume bool, t *testing.T) {
 	// Prepare
-	dir := assertPath(t, testDirFeature, false)
+	dir := assertDirs(t, testDirFeature, false)
 	// Remove temporary directory at the end.
 	defer os.RemoveAll(dir)
 
@@ -191,7 +191,7 @@ func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, 
 
 	statuses = append(statuses, pullStatusChanges(mc, postDisconnectEventCount)...)
 	waitDisconnect.Wait()
-	defer feature.Connect(mc, supConfig, edgeCfg)
+	defer connectFeature(t, mc, feature, getDefaultFlagValue(t, flagFeatureID))
 	if install {
 		checkInstallStatusEvents(statuses, t)
 	} else {

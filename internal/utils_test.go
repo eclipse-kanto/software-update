@@ -30,6 +30,23 @@ const (
 	testTopicEntryID   = "thing.id"
 	testTopicNamespace = "my-namespace.id"
 	testTenantID       = "test-tenant-id"
+
+	flagBroker          = "broker"
+	flagUsername        = "username"
+	flagPassword        = "password"
+	flagStorageLocation = "storageLocation"
+	flagFeatureID       = "featureId"
+	flagModuleType      = "moduleType"
+	flagArtifactType    = "artifactType"
+	flagMode            = "mode"
+	flagLogFile         = "logFile"
+	flagLogLevel        = "logLevel"
+	flagLogFileSize     = "logFileSize"
+	flagLogFileCount    = "logFileCount"
+	flagLogFileMaxAge   = "logFileMaxAge"
+	flagCert            = "serverCert"
+	flagRetryCount      = "downloadRetryCount"
+	flagRetryInterval   = "downloadRetryInterval"
 )
 
 // testConfig is used to provide mock data
@@ -37,16 +54,13 @@ type testConfig struct {
 	storageLocation string
 	clientConnected bool
 	featureID       string
+	installDirs     []string
+	mode            string
 }
-
-var (
-	supConfig *ScriptBasedSoftwareUpdatableConfig
-	edgeCfg   *edgeConfiguration
-)
 
 var testVersion = "TestVersion"
 
-func assertPath(t *testing.T, name string, create bool) string {
+func assertDirs(t *testing.T, name string, create bool) string {
 	if _, err := os.Stat(name); !os.IsNotExist(err) {
 		if err = os.RemoveAll(name); err != nil {
 			t.Fatalf("failed delete temporary directory [%s]: %v", name, err)
@@ -58,6 +72,20 @@ func assertPath(t *testing.T, name string, create bool) string {
 		}
 	}
 	return name
+}
+
+func connectFeature(t *testing.T, mc *mockedClient, feature *ScriptBasedSoftwareUpdatable, featureID string) error {
+	t.Helper()
+	supConfig := &ScriptBasedSoftwareUpdatableConfig{
+		Broker:     getDefaultFlagValue(t, flagBroker),
+		FeatureID:  featureID,
+		ModuleType: getDefaultFlagValue(t, flagModuleType),
+	}
+	edgeCfg := &edgeConfiguration{
+		DeviceID: model.NewNamespacedID(testTopicNamespace, testTopicEntryID).String(),
+		TenantID: testTenantID,
+	}
+	return feature.Connect(mc, supConfig, edgeCfg)
 }
 
 // mockScriptBasedSoftwareUpdatable create new ScriptBasedSoftwareUpdatable with mocked MQTT clients.
@@ -78,23 +106,17 @@ func mockScriptBasedSoftwareUpdatable(t *testing.T, tc *testConfig) (*ScriptBase
 		installCommand: &command{},
 		// Define the module artifact(s) type: archive or plane
 		artifactType: "plane",
+		// Define install location, where to search for artifacts
+		installDirs: tc.installDirs,
+		// Define the local file artifacts access restrictions
+		accessMode: initAccessMode(tc.mode),
 		// Create queue with size 10
 		queue: make(chan operationFunc, 10),
 		// Create mocked MQTT Connection
 		mqttClient: mc,
 	}
 
-	// Initialize mocked ScriptBasedSoftwareUpdatable
-	supConfig = &ScriptBasedSoftwareUpdatableConfig{
-		Broker:     getDefaultFlagValue(t, flagBroker),
-		FeatureID:  tc.featureID,
-		ModuleType: getDefaultFlagValue(t, flagModuleType),
-	}
-	edgeCfg = &edgeConfiguration{
-		DeviceID: model.NewNamespacedID(testTopicNamespace, testTopicEntryID).String(),
-		TenantID: testTenantID,
-	}
-	if err := feature.Connect(mc, supConfig, edgeCfg); err != nil { // calls feature.init(...)
+	if err := connectFeature(t, mc, feature, tc.featureID); err != nil { // calls feature.init(...)
 		return nil, nil, err
 	}
 

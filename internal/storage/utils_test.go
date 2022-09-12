@@ -344,7 +344,7 @@ func TestToArtifact(t *testing.T) {
 	expected.Download[hawkbit.HTTP] = &hawkbit.Links{URL: "http://test.me", MD5URL: ""}
 
 	// 1. Validate with MD5 and HTTP
-	actual, err := toArtifact(expected)
+	actual, err := toArtifact(expected, true)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestToArtifact(t *testing.T) {
 	// 2. Validate with SHA1 and HTTPS
 	expected.Checksums[hawkbit.SHA1] = "sha1-value"
 	expected.Download[hawkbit.HTTPS] = &hawkbit.Links{URL: "https://test.me", MD5URL: ""}
-	actual, err = toArtifact(expected)
+	actual, err = toArtifact(expected, true)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -361,7 +361,7 @@ func TestToArtifact(t *testing.T) {
 
 	// 3. Validate with SHA256 and HTTPS
 	expected.Checksums[hawkbit.SHA256] = "sha256-value"
-	actual, err = toArtifact(expected)
+	actual, err = toArtifact(expected, true)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -369,14 +369,14 @@ func TestToArtifact(t *testing.T) {
 
 	// 4. Validate for unknown/missing Hash
 	expected.Checksums = make(map[hawkbit.Hash]string)
-	if _, err = toArtifact(expected); err == nil {
+	if _, err = toArtifact(expected, true); err == nil {
 		t.Errorf("an error was expected for unknown or missing hash")
 	}
 
 	// 5. Validate for unknown/missing link
 	expected.Download = make(map[hawkbit.Protocol]*hawkbit.Links)
 	expected.Download[hawkbit.FTP] = &hawkbit.Links{URL: "ftp://test.me", MD5URL: ""}
-	if _, err = toArtifact(expected); err == nil {
+	if _, err = toArtifact(expected, true); err == nil {
 		t.Errorf("an error was expected for unknown or missing link")
 	}
 }

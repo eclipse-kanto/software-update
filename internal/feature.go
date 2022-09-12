@@ -13,6 +13,7 @@ package feature
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +28,10 @@ import (
 const (
 	defaultDisconnectTimeout = 250 * time.Millisecond
 	defaultKeepAlive         = 20 * time.Second
+
+	modeStrict = "strict"
+	modeScoped = "scoped"
+	modeLax    = "lax"
 )
 
 var (
@@ -50,6 +55,8 @@ type ScriptBasedSoftwareUpdatableConfig struct {
 	ServerCert            string
 	DownloadRetryCount    int
 	DownloadRetryInterval durationTime
+	InstallDirs           pathArgs
+	Mode                  string
 	InstallCommand        command
 }
 
@@ -65,6 +72,8 @@ type ScriptBasedSoftwareUpdatable struct {
 	serverCert            string
 	downloadRetryCount    int
 	downloadRetryInterval time.Duration
+	installDirs           []string
+	accessMode            string
 	installCommand        *command
 }
 
@@ -89,6 +98,10 @@ func InitScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Ed
 		downloadRetryCount: scriptSUPConfig.DownloadRetryCount,
 		// Interval between download reattempts
 		downloadRetryInterval: time.Duration(scriptSUPConfig.DownloadRetryInterval),
+		// Install locations for local artifacts
+		installDirs: scriptSUPConfig.InstallDirs.args,
+		// Access mode for local artifacts
+		accessMode: initAccessMode(scriptSUPConfig.Mode),
 		// Define the module artifact(s) type: archive or plane
 		artifactType: scriptSUPConfig.ArtifactType,
 		// Create queue with size 10
@@ -149,5 +162,15 @@ func (scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) Validate() error {
 	if scriptSUPConfig.DownloadRetryCount < 0 {
 		return fmt.Errorf("negative download retry count value - %d", scriptSUPConfig.DownloadRetryCount)
 	}
+	if !strings.EqualFold(modeStrict, scriptSUPConfig.Mode) && !strings.EqualFold(modeScoped, scriptSUPConfig.Mode) && !strings.EqualFold(modeLax, scriptSUPConfig.Mode) {
+		return fmt.Errorf("invalid mode value, must be either strict, scoped or lax")
+	}
 	return nil
+}
+
+func initAccessMode(accessMode string) string {
+	if accessMode == "" {
+		return modeStrict
+	}
+	return accessMode
 }

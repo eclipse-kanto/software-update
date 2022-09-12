@@ -83,13 +83,13 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, ser
 		}
 	} else {
 		// No available previous download, perform a full download.
-		response, remainingRetries, err := robustDownload(artifact.Link, 0, serverCert, retryCount, retryInterval)
+		source, remainingRetries, _, err := openResource(artifact, 0, serverCert, retryCount, retryInterval)
 		if err != nil {
 			return err
 		}
-		defer response.Body.Close()
+		defer source.Close()
 
-		if _, dError = download(tmp, response.Body, artifact, progress, serverCert, remainingRetries, retryInterval, done); dError != nil {
+		if _, dError = download(tmp, source, artifact, progress, serverCert, remainingRetries, retryInterval, done); dError != nil {
 			return dError
 		}
 	}
@@ -101,20 +101,20 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, ser
 func resume(to string, offset int64, artifact *Artifact, progress progressBytes, serverCert string, retryCount int,
 	retryInterval time.Duration, done chan struct{}) (int64, error) {
 	// Send the HTTP request and get its response.
-	response, remainingRetries, err := robustDownload(artifact.Link, offset, serverCert, retryCount, retryInterval)
+	source, remainingRetries, resumeSupported, err := openResource(artifact, offset, serverCert, retryCount, retryInterval)
 	if err != nil {
 		return 0, err
 	}
-	defer response.Body.Close()
+	defer source.Close()
 
 	// Check if HTTP server support Range header. If not, delete existing file and perform regular download
-	if response.Header.Get("Accept-Ranges") != "bytes" || response.Header.Get("Content-Range") == "" {
+	if !resumeSupported {
 		logger.Infof("resume is not supported, remove previous file: %s", to)
 		if err := os.Remove(to); err != nil {
 			logger.Errorf("error removing partially downloaded file %s", to)
 			return 0, err
 		}
-		return download(to, response.Body, artifact, progress, serverCert, remainingRetries, retryInterval, done)
+		return download(to, source, artifact, progress, serverCert, remainingRetries, retryInterval, done)
 	}
 
 	// Download the rest of the file.
@@ -128,7 +128,7 @@ func resume(to string, offset int64, artifact *Artifact, progress progressBytes,
 	if progress != nil {
 		progress(offset)
 	}
-	return downloadFile(file, response.Body, to, offset, artifact, progress, serverCert, remainingRetries, retryInterval, done)
+	return downloadFile(file, source, to, offset, artifact, progress, serverCert, remainingRetries, retryInterval, done)
 }
 
 func downloadFile(file *os.File, input io.ReadCloser, to string, offset int64, artifact *Artifact,
@@ -163,46 +163,62 @@ func downloadFile(file *os.File, input io.ReadCloser, to string, offset int64, a
 	return w, err
 }
 
-func robustDownload(link string, offset int64, serverCert string, retryCount int, retryInterval time.Duration) (*http.Response, int, error) {
+func openResource(artifact *Artifact, offset int64, serverCert string, retryCount int, retryInterval time.Duration) (io.ReadCloser, int, bool, error) {
 	var err error
-	var resp *http.Response
+	var source io.ReadCloser
+	var resumeSupported bool
 	for retryCount >= 0 {
-		resp, err = attemptDownload(link, offset, serverCert)
+		source, resumeSupported, err = getInput(artifact, offset, serverCert)
 		if err == nil {
-			logger.Debugf("download response for artifact %s - %v", link, resp)
-			return resp, retryCount, nil
+			return source, retryCount, resumeSupported, nil
 		}
 		retryCount--
 		if retryCount > 0 {
-			logger.Errorf("error downloading artifact %s, remaining attempts - %d, cause: %v", link, retryCount, err)
+			logger.Errorf("error downloading artifact %s, remaining attempts - %d, cause: %v", artifact.Link, retryCount, err)
 			logger.Infof("%v timeout until next attempt", retryInterval)
 			if retryInterval > 0 {
 				time.Sleep(retryInterval)
 			}
 		}
 	}
-	return nil, 0, err
+	return nil, 0, false, err
 }
 
-func attemptDownload(link string, offset int64, serverCert string) (*http.Response, error) {
-	response, err := requestDownload(link, offset, serverCert)
+func getInput(artifact *Artifact, offset int64, serverCert string) (io.ReadCloser, bool, error) {
+	if artifact.Local { // a file
+		return getFileInput(artifact.Link, offset)
+	}
+
+	response, err := requestDownload(artifact.Link, offset, serverCert) // not a file
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// HTTP Status code is NOT in the 2xx range
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("http status code is not in the 2xx range: %v", response.StatusCode)
+		return nil, false, fmt.Errorf("http status code is not in the 2xx range: %v", response.StatusCode)
 	}
-	return response, nil
+	logger.Debugf("download response for artifact %s - %v", artifact.Link, response)
+	return response.Body, supportsResume(response), nil
+}
+
+func getFileInput(location string, offset int64) (io.ReadCloser, bool, error) {
+	file, err := os.Open(location)
+	if err != nil {
+		return nil, false, fmt.Errorf("error opening file - %s: %v", location, err)
+	}
+	logger.Infof("opened local file artifact - %s", file)
+	if offset > 0 {
+		_, err = file.Seek(offset, 0)
+	}
+	return file, err == nil, nil // if err != nil, resume is not supported
 }
 
 func requestDownload(link string, offset int64, serverCert string) (*http.Response, error) {
 	// Create new HTTP request with Range header.
 	request, err := http.NewRequest(http.MethodGet, link, nil)
 	if err != nil {
-		logger.Errorf("error doing http(s) request to %s", link)
-		return nil, err
+		return nil, fmt.Errorf("error doing http(s) request to %s", link)
 	}
 	if offset > 0 {
 		request.Header.Set("Range", fmt.Sprintf("bytes=%v-", offset))
@@ -213,8 +229,7 @@ func requestDownload(link string, offset int64, serverCert string) (*http.Respon
 	if len(serverCert) > 0 {
 		caCert, err := ioutil.ReadFile(serverCert)
 		if err != nil {
-			logger.Errorf("error reading CA certificate file - \"%s\"", serverCert)
-			return nil, err
+			return nil, fmt.Errorf("error reading CA certificate file - \"%s\"", serverCert)
 		}
 		caCertPool = x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
@@ -339,4 +354,8 @@ func supportedCipherSuites() []uint16 {
 		cid[i] = cs[i].ID
 	}
 	return cid
+}
+
+func supportsResume(response *http.Response) bool {
+	return !(response.Header.Get("Accept-Ranges") != "bytes" || response.Header.Get("Content-Range") == "")
 }

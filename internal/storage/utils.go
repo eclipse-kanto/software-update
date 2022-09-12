@@ -115,6 +115,12 @@ func FindAvailableLocation(parent string) (string, error) {
 	return filepath.Join(parent, strconv.Itoa(id)), nil
 }
 
+// SplitArtifacts is a helper function, passed to strings.FieldsFunc, specifying the valid separators
+// between artifacts and install directories.
+func SplitArtifacts(r rune) bool {
+	return r == ',' || r == os.PathListSeparator
+}
+
 func loadInstalledDep(dep string) (*hawkbit.DependencyDescription, error) {
 	logger.Debugf("Load installed dependency: %s", dep)
 	file, err := os.Open(dep)
@@ -144,7 +150,7 @@ func loadInstalledDep(dep string) (*hawkbit.DependencyDescription, error) {
 		}
 	}
 	if info.Group == "" || info.Name == "" || info.Version == "" {
-		return nil, fmt.Errorf("missing mandaroty field in installed dependency file: %s", dep)
+		return nil, fmt.Errorf("missing mandatory field in installed dependency file: %s", dep)
 	}
 	logger.Infof("Installed Dependency [%s] -> %s", dep, info)
 	return info, nil
@@ -178,8 +184,18 @@ func toModule(sma hawkbit.SoftwareModuleAction) (*Module, error) {
 		Artifacts: make([]*Artifact, len(sma.Artifacts)),
 		Metadata:  sma.Metadata,
 	}
+	var copyAll bool
+	var artifactsToCopy []string
+	if module.Metadata != nil {
+		copyArtifactsValue := module.Metadata["copy-artifacts"]
+		if copyArtifactsValue == "*" {
+			copyAll = true
+		} else {
+			artifactsToCopy = strings.FieldsFunc(copyArtifactsValue, SplitArtifacts)
+		}
+	}
 	for i, artifact := range sma.Artifacts {
-		tmp, err := toArtifact(artifact)
+		tmp, err := toArtifact(artifact, copyAll || contains(artifactsToCopy, artifact.Filename))
 		if err != nil {
 			return nil, err
 		}
@@ -189,17 +205,21 @@ func toModule(sma hawkbit.SoftwareModuleAction) (*Module, error) {
 	return module, nil
 }
 
-func toArtifact(sa *hawkbit.SoftwareArtifactAction) (*Artifact, error) {
+func toArtifact(sa *hawkbit.SoftwareArtifactAction, copy bool) (*Artifact, error) {
 	artifact := &Artifact{
 		FileName: sa.Filename,
 		Size:     sa.Size,
+		Copy:     copy,
 	}
 
-	// Set artifact link with following priority: HTTPS, HTTP
+	// Set artifact link with following priority: HTTPS, HTTP, file
 	if sa.Download[hawkbit.HTTPS] != nil {
 		artifact.Link = sa.Download[hawkbit.HTTPS].URL
 	} else if sa.Download[hawkbit.HTTP] != nil {
 		artifact.Link = sa.Download[hawkbit.HTTP].URL
+	} else if sa.Download[ProtocolFile] != nil {
+		artifact.Link = sa.Download[ProtocolFile].URL
+		artifact.Local = true
 	} else {
 		return nil, fmt.Errorf("unknown or missing link for artifact %s", sa.Filename)
 	}
@@ -288,4 +308,13 @@ func searchAndMove(inDir string, toDir string, module *Module) {
 			}
 		}
 	}
+}
+
+func contains(s []string, str string) bool {
+	for _, el := range s {
+		if el == str {
+			return true
+		}
+	}
+	return false
 }

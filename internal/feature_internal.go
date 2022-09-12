@@ -24,13 +24,14 @@ import (
 )
 
 const (
-	errRuntime              = "internal runtime error"
-	errMultiArchives        = "archive modules cannot have multiples artifacts"
-	errDownload             = "fail to download module"
-	errExtractArchive       = "fail to extract module archive"
-	errInstallScript        = "fail to execute install script"
-	errInstalledDepsSsave   = "fail to save installed dependencies"
-	errInstalledDepsRefresh = "fail to refresh installed dependencies"
+	errRuntime               = "internal runtime error"
+	errMultiArchives         = "archive modules cannot have multiple artifacts"
+	errDownload              = "fail to download module"
+	errExtractArchive        = "fail to extract module archive"
+	errInstallScript         = "fail to execute install script"
+	errInstalledDepsSave     = "fail to save installed dependencies"
+	errInstalledDepsRefresh  = "fail to refresh installed dependencies"
+	errDetermineAbsolutePath = "fail to determine absolute path of install script %s - %v"
 )
 
 // opw is an operation wrapper function.
@@ -200,9 +201,25 @@ func newFileOS(dir string, cid string, module *storage.Module, status hawkbit.St
 	return ops
 }
 
-// setLastOS sets the last operatino status and log an error on error.
+// setLastOS sets the last operation status and log an error on error.
 func setLastOS(su *hawkbit.SoftwareUpdatable, os *hawkbit.OperationStatus) {
 	if err := su.SetLastOperation(os); err != nil {
 		logger.Errorf("fail to send last operation status: %v", err)
 	}
+}
+
+func (f *ScriptBasedSoftwareUpdatable) validateLocalArtifacts(module *storage.Module) error {
+	logger.Debugf("validating local artifacts of module - %v", module)
+	for _, sa := range module.Artifacts {
+		if !sa.Local {
+			continue
+		}
+		location, err := f.resolveLocalArtifact(sa.Link)
+		if err != nil {
+			return err
+		}
+		logger.Infof("resolved local artifact link [%s] to %s", sa.Link, location)
+		sa.Link = location
+	}
+	return nil
 }

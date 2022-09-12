@@ -27,29 +27,22 @@ import (
 )
 
 const (
-	flagVersion         = "version"
-	flagConfigFile      = "configFile"
-	flagBroker          = "broker"
-	flagUsername        = "username"
-	flagPassword        = "password"
-	flagStorageLocation = "storageLocation"
-	flagFeatureID       = "featureId"
-	flagModuleType      = "moduleType"
-	flagArtifactType    = "artifactType"
-	flagInstall         = "install"
-	flagCert            = "serverCert"
-	flagLogFile         = "logFile"
-	flagLogLevel        = "logLevel"
-	flagLogFileSize     = "logFileSize"
-	flagLogFileCount    = "logFileCount"
-	flagLogFileMaxAge   = "logFileMaxAge"
-	flagRetryCount      = "downloadRetryCount"
-	flagRetryInterval   = "downloadRetryInterval"
+	flagVersion     = "version"
+	flagConfigFile  = "configFile"
+	flagInstall     = "install"
+	flagInstallDirs = "installDirs"
 )
 
 var (
 	suConfig  = &ScriptBasedSoftwareUpdatableConfig{}
 	logConfig = &logger.LogConfig{}
+
+	descriptions = map[string]string{
+		"mode": "Artifact access mode. Restricts where local file system artifacts can be located.\nAllowed values are:" +
+			"\n  'strict' - artifacts can only be located in directories, included in installDirs property value" +
+			"\n  'scoped' - artifacts can only be located in directories or their subdirectories recursively, included in installDirs property value" +
+			"\n  'lax' - artifacts can be located anywhere on local file system. Use with care!",
+	}
 )
 
 type cfg struct {
@@ -64,6 +57,8 @@ type cfg struct {
 	ServerCert            string       `json:"serverCert" descr:"A PEM encoded certificate \"file\" for secure artifact download"`
 	DownloadRetryCount    int          `json:"downloadRetryCount" def:"0" descr:"Number of retries, in case of a failed download.\n By default no retries are supported."`
 	DownloadRetryInterval durationTime `json:"downloadRetryInterval" def:"5s" descr:"Interval between retries, in case of a failed download.\n Should be a sequence of decimal numbers, each with optional fraction and a unit suffix, such as '300ms', '1.5h', '10m30s', etc. Valid time units are 'ns', 'us' (or 'µs'), 'ms', 's', 'm', 'h'."`
+	InstallDirs           []string     `json:"installDirs" descr:"Local file system directories, where to search for module artifacts"`
+	Mode                  string       `json:"mode" def:"strict" descr:"%s"`
 	LogFile               string       `json:"logFile" def:"log/software-update.log" descr:"Log file location in storage directory"`
 	LogLevel              string       `json:"logLevel" def:"INFO" descr:"Log levels are ERROR, WARN, INFO, DEBUG, TRACE"`
 	LogFileSize           int          `json:"logFileSize" def:"2" descr:"Log file size in MB before it gets rotated"`
@@ -81,6 +76,7 @@ func InitFlags(version string) (*ScriptBasedSoftwareUpdatableConfig, *logger.Log
 
 	// the install flag is set in the config object initially
 	flag.Var(&suConfig.InstallCommand, flagInstall, "Defines the absolute path to install script")
+	flag.Var(&suConfig.InstallDirs, flagInstallDirs, "Local file system directories, where to search for module artifacts")
 
 	initFlagsWithDefaultValues(flgConfig)
 	flag.Parse()
@@ -106,6 +102,9 @@ func initFlagsWithDefaultValues(config interface{}) {
 		fieldValue := valueOf.FieldByName(fieldType.Name)
 		pointer := fieldValue.Addr().Interface()
 		flagName := toFlagName(fieldType.Name)
+		if val, ok := descriptions[flagName]; ok {
+			description = fmt.Sprintf(description, val)
+		}
 		switch val := fieldValue.Interface(); val.(type) {
 		case string:
 			flag.StringVar(pointer.(*string), flagName, defaultValue, description)
@@ -171,10 +170,10 @@ func applyFlags(flagsConfig interface{}) {
 	flag.Visit(func(f *flag.Flag) {
 		name := toFieldName(f.Name)
 		srcFieldVal := flagsConfigVal.FieldByName(name)
-		if srcFieldVal.Kind() != reflect.Invalid {
+		if srcFieldVal.Kind() != reflect.Invalid && srcFieldVal.Kind() != reflect.Struct {
 			dstFieldSu := suConfigVal.FieldByName(name)
 			dstFieldLog := logConfigVal.FieldByName(name)
-			if dstFieldSu.Kind() != reflect.Invalid {
+			if dstFieldSu.Kind() != reflect.Invalid && dstFieldSu.Kind() != reflect.Struct {
 				dstFieldSu.Set(srcFieldVal)
 			} else if dstFieldLog.Kind() != reflect.Invalid {
 				dstFieldLog.Set(srcFieldVal)
@@ -211,6 +210,12 @@ func applyConfigurationFile(configFile string) error {
 		}
 	}
 
+	if len(def.InstallDirs) > 0 && isNotVisited(flagInstallDirs) {
+		for _, v := range def.InstallDirs {
+			suConfig.InstallDirs.Set(v)
+		}
+	}
+
 	// Fulfil Log configuration with default/configuration values.
 	copyConfigData(def, logConfig)
 	return nil
@@ -233,7 +238,7 @@ func copyConfigData(sourceConfig interface{}, targetConfig interface{}) {
 	for i := 0; i < typeOfSourceConfig.NumField(); i++ {
 		fieldType := typeOfSourceConfig.Field(i)
 		fieldToSet := targetConfigVal.FieldByName(fieldType.Name)
-		if fieldToSet.Kind() != reflect.Invalid {
+		if fieldToSet.Kind() != reflect.Invalid && fieldToSet.Kind() != reflect.Struct {
 			fieldToSet.Set(sourceConfigVal.FieldByName(fieldType.Name))
 		}
 	}
