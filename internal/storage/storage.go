@@ -72,6 +72,7 @@ type Artifact struct {
 	HashType  string `json:"hashType"`
 	HashValue string `json:"hashValue"`
 	Link      string `json:"link"`
+	Local     bool   `json:"local"`
 	Copy      bool   `json:"copy"`
 }
 
@@ -237,7 +238,7 @@ func (st *Storage) DownloadModule(toDir string, module *Module, progress Progres
 	if progress != nil {
 		var totalSize int64
 		for _, sa := range module.Artifacts {
-			if !IsFileLink(sa.Link) || sa.Copy {
+			if !sa.Local || sa.Copy {
 				totalSize += int64(sa.Size)
 			}
 		}
@@ -260,7 +261,7 @@ func (st *Storage) DownloadModule(toDir string, module *Module, progress Progres
 
 	onlyLocalNoCopyArtifacts := true
 	for _, sa := range module.Artifacts {
-		if IsFileLink(sa.Link) && !sa.Copy {
+		if sa.Local && !sa.Copy {
 			logger.Infof("read-only local artifact - [%s]", sa.Link)
 			continue
 		}

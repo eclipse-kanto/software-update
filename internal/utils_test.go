@@ -54,11 +54,13 @@ type testConfig struct {
 	storageLocation string
 	clientConnected bool
 	featureID       string
+	installDirs     []string
+	mode            string
 }
 
 var testVersion = "TestVersion"
 
-func assertPath(t *testing.T, name string, create bool) string {
+func assertDirs(t *testing.T, name string, create bool) string {
 	if _, err := os.Stat(name); !os.IsNotExist(err) {
 		if err = os.RemoveAll(name); err != nil {
 			t.Fatalf("failed delete temporary directory [%s]: %v", name, err)
@@ -104,6 +106,10 @@ func mockScriptBasedSoftwareUpdatable(t *testing.T, tc *testConfig) (*ScriptBase
 		installCommand: &command{},
 		// Define the module artifact(s) type: archive or plane
 		artifactType: "plane",
+		// Define install location, where to search for artifacts
+		installDirs: tc.installDirs,
+		// Define the local file artifacts access restrictions
+		accessMode: initAccessMode(tc.mode),
 		// Create queue with size 10
 		queue: make(chan operationFunc, 10),
 		// Create mocked MQTT Connection
@@ -202,7 +208,7 @@ func (client *mockedClient) Publish(topic string, qos byte, retained bool, paylo
 	if env.Topic.Namespace != testTopicNamespace || env.Topic.EntityID != testTopicEntryID {
 		return token
 	}
-	// Valdiate its starting path.
+	// Validate its starting path.
 	if !strings.HasPrefix(env.Path, "/features/SoftwareUpdatable/properties/status/lastOperation") {
 		return token
 	}

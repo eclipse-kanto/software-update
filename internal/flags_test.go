@@ -27,7 +27,7 @@ const (
 	testFirstArg       = "cmd"
 	testConfigFileName = "test_config.txt"
 	testDirFlags       = "_tmp-flags"
-	testConfigFilePath = testDirFlags + "/" + testConfigFileName
+	testConfigFileDirs = testDirFlags + "/" + testConfigFileName
 )
 
 // TestInstallCommandFlag tests the initialization with flags when install command is provided
@@ -40,36 +40,36 @@ func TestInstallCommandFlag(t *testing.T) {
 	expectedInstallArgs := "-testArgument"
 
 	// Prepare test default dir
-	dir := assertPath(t, testDirFlags, true)
+	dir := assertDirs(t, testDirFlags, true)
 	defer os.RemoveAll(dir)
 
 	content := "{\"install\": [\"" + notExpectedInstallCMD + "\",\"" + notExpectedInstallArgs + "\"]}"
 	writeToConfigFile(t, content)
 
-	setFlags([]string{c(flagConfigFile, testConfigFilePath),
+	setFlags([]string{c(flagConfigFile, testConfigFileDirs),
 		c(flagInstall, expectedInstallCMD),
 		c(flagInstall, expectedInstallArgs)})
 
 	assertInstallCommand(t, expectedInstallCMD, expectedInstallArgs)
 }
 
-// TestInstallPathCommandFlag tests the initialization with flags when install path is provided
+// TestInstallDirsCommandFlag tests the initialization with flags when install path is provided
 // with flag, but also in config file. Assert that the flag has higher priority.
-func TestInstallPathCommandFlag(t *testing.T) {
-	notExpectedPath := "path1"
-	expectedPath := "path2"
+func TestInstallDirsCommandFlag(t *testing.T) {
+	notExpectedDir := "dir1"
+	expectedDir := "dir2"
 
 	// Prepare test default dir
-	dir := assertPath(t, testDirFlags, true)
+	dir := assertDirs(t, testDirFlags, true)
 	defer os.RemoveAll(dir)
 
-	content := "{\"installPath\": [\"" + notExpectedPath + "\"]}"
+	content := "{\"installDirs\": [\"" + notExpectedDir + "\"]}"
 	writeToConfigFile(t, content)
 
-	setFlags([]string{c(flagConfigFile, testConfigFilePath),
-		c(flagInstallPath, expectedPath)})
+	setFlags([]string{c(flagConfigFile, testConfigFileDirs),
+		c(flagInstallDirs, expectedDir)})
 
-	assertInstallPath(t, expectedPath)
+	assertInstallDirs(t, expectedDir)
 }
 
 // TestInstallCommandConfig tests the initialization with flags, when install command is provided only
@@ -79,14 +79,14 @@ func TestInstallCommandConfig(t *testing.T) {
 	expectedInstallArgs := "-exampleArgument"
 
 	// Prepare test default dir
-	dir := assertPath(t, testDirFlags, true)
+	dir := assertDirs(t, testDirFlags, true)
 	defer os.RemoveAll(dir)
 
 	// 1. Test with Install command not set with flag
 	content := "{\"install\": [\"" + expectedInstallCMD + "\",\"" + expectedInstallArgs + "\"]}"
 	writeToConfigFile(t, content)
 
-	setFlags([]string{c(flagConfigFile, testConfigFilePath)})
+	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
 
 	assertInstallCommand(t, expectedInstallCMD, expectedInstallArgs)
 }
@@ -97,12 +97,12 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 	expectedResult := "DEBUG"
 
 	// Prepare test default dir
-	dir := assertPath(t, testDirFlags, true)
+	dir := assertDirs(t, testDirFlags, true)
 	defer os.RemoveAll(dir)
 
 	// 1. Test with log field
 	writeToConfigFile(t, "{\""+flagLogLevel+"\": \"TRACE\"}")
-	setFlags([]string{c(flagConfigFile, testConfigFilePath), c(flagLogLevel, expectedResult)})
+	setFlags([]string{c(flagConfigFile, testConfigFileDirs), c(flagLogLevel, expectedResult)})
 	_, lc, err := InitFlags(testVersion)
 	if err != nil {
 		t.Errorf("not expecting error when initializing flags with log level: %v", err)
@@ -115,7 +115,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 	expectedResult = "FeatureTestUpdatable"
 	// 2. Test with software updatable config field
 	writeToConfigFile(t, "{\""+flagFeatureID+"\": \"WrongFeatureID\"}")
-	setFlags([]string{c(flagConfigFile, testConfigFilePath), c(flagFeatureID, expectedResult)})
+	setFlags([]string{c(flagConfigFile, testConfigFileDirs), c(flagFeatureID, expectedResult)})
 	sc, _, err := InitFlags(testVersion)
 	if err != nil {
 		t.Errorf("not expecting error when initializing flags with featureId: %v", err)
@@ -133,7 +133,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 	expectedServerCert := "TestCert"
 	expectedDownloadRetryCount := 3
 	expectedDownloadRetryInterval := "5s"
-	expectedInstallPath := "/var/tmp/storage"
+	expectedInstallDir := "/var/tmp/storage"
 	expectedMode := "lax"
 	expectedLogFile := ""
 	expectedLogFileCount := 4
@@ -154,7 +154,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 		c(flagCert, expectedServerCert),
 		c(flagRetryCount, strconv.Itoa(expectedDownloadRetryCount)),
 		c(flagRetryInterval, expectedDownloadRetryInterval),
-		c(flagInstallPath, expectedInstallPath),
+		c(flagInstallDirs, expectedInstallDir),
 		c(flagMode, expectedMode),
 		c(flagLogFile, expectedLogFile),
 		c(flagLogFileCount, strconv.Itoa(expectedLogFileCount)),
@@ -182,7 +182,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 		InstallCommand:        command{cmd: expectedInstall},
 		DownloadRetryCount:    expectedDownloadRetryCount,
 		DownloadRetryInterval: getDurationTime(t, expectedDownloadRetryInterval),
-		InstallPath:           pathArgs{args: []string{expectedInstallPath}},
+		InstallDirs:           pathArgs{args: []string{expectedInstallDir}},
 		Mode:                  expectedMode,
 		FeatureID:             expectedFeatureID,
 		ModuleType:            expectedModuleType,
@@ -213,24 +213,24 @@ func TestInitFlagsWithPrintVersion(t *testing.T) {
 // TestInitFlagWithInvalidConfigFile tests the behaviour when wrong JSON config file is supplied.
 func TestInitFlagWithInvalidConfigFile(t *testing.T) {
 	// Prepare test default dir
-	dir := assertPath(t, testDirFlags, true)
+	dir := assertDirs(t, testDirFlags, true)
 	defer os.RemoveAll(dir)
 
 	//1. Test with JSON which is not starting with leading "{" character
 	writeToConfigFile(t, "\"Broker\": \"tcp://host:1234\"}")
-	setFlags([]string{c(flagConfigFile, testConfigFilePath)})
+	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
 	sc, lc, err := InitFlags(testVersion)
 	assertInitFlagsFails(t, sc, lc, err, "expecting init flags to fail if JSON format of the config file is not valid")
 
 	//2. Test with JSON using string instead of integer for config field value
 	writeToConfigFile(t, "{\"Broker\": \"tcp://host:1234\", \"LogFileSize\": \"20\"}")
-	setFlags([]string{c(flagConfigFile, testConfigFilePath)})
+	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
 	sc, lc, err = InitFlags(testVersion)
 	assertInitFlagsFails(t, sc, lc, err, "expecting init flags to fail if provide int value to an string field")
 
 	//3. Test with JSON using integer instead of string for config field value
 	writeToConfigFile(t, "{\"Broker\": \"tcp://host:1234\", \"Username\": 200}")
-	setFlags([]string{c(flagConfigFile, testConfigFilePath)})
+	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
 	sc, lc, err = InitFlags(testVersion)
 	assertInitFlagsFails(t, sc, lc, err, "expecting init flags to fail if provide string value to an int field")
 }
@@ -246,14 +246,14 @@ func TestInitFlagsWithMissingConfigFile(t *testing.T) {
 // TestInitFlagsConfigAllPropertiesProvided verifies that all of the properties from the configuration file are set
 func TestInitFlagsConfigAllPropertiesProvided(t *testing.T) {
 	// Prepare test default dir
-	dir := assertPath(t, testDirFlags, true)
+	dir := assertDirs(t, testDirFlags, true)
 	defer os.RemoveAll(dir)
 
 	content := "{\"Broker\": \"tcp://host:1234\",\"Username\": \"TestUser\",\"Password\": \"TestPass\",\"StorageLocation\": \"_tmp-flags\",\"FeatureID\": \"SoftwareTestUpdatable\",\"ModuleType\": \"TestSoftware\",\"ArtifactType\": \"TestArchive\"," +
 		"\"DownloadRetryInterval\":\"7s\", \"Mode\":\"Scoped\", \"LogFile\": \"TestLogFile.txt\",\"LogLevel\": \"TRACE\",\"LogFileSize\": 10,\"LogFileCount\": 20,\"LogFileMaxAge\": 30}"
 	writeToConfigFile(t, content)
 
-	setFlags([]string{c(flagConfigFile, testConfigFilePath)})
+	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
 
 	expectedConfig := &ScriptBasedSoftwareUpdatableConfig{
 		Broker:                "tcp://host:1234",
@@ -282,11 +282,11 @@ func TestInitFlagsConfigAllPropertiesProvided(t *testing.T) {
 // Assert that error is returned.
 func TestWithEmptyConfigFile(t *testing.T) {
 	// Prepare test default dir
-	dir := assertPath(t, testDirFlags, true)
+	dir := assertDirs(t, testDirFlags, true)
 	defer os.RemoveAll(dir)
 
 	writeToConfigFile(t, "")
-	setFlags([]string{c(flagConfigFile, testConfigFilePath)})
+	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
 
 	_, _, err := InitFlags(testVersion)
 	if err == nil {
@@ -298,12 +298,12 @@ func TestWithEmptyConfigFile(t *testing.T) {
 // and those who are not, are used from default values
 func TestInitFlagsWithConfigMixedContent(t *testing.T) {
 	// Prepare test default dir
-	dir := assertPath(t, testDirFlags, true)
+	dir := assertDirs(t, testDirFlags, true)
 	defer os.RemoveAll(dir)
 
 	content := "{\"broker\": \"tcp://host:12345\",\"logLevel\": \"TRACE\",\"logFile\": \"test_log.txt\",\"username\": \"test\"}"
 	writeToConfigFile(t, content)
-	setFlags([]string{c(flagConfigFile, testConfigFilePath)})
+	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
 
 	expectedConfig := &ScriptBasedSoftwareUpdatableConfig{
 		Broker:                "tcp://host:12345",
@@ -400,18 +400,18 @@ func assertInstallCommand(t *testing.T, expectedInstallCMD string, expectedInsta
 	}
 }
 
-// assertInstallPath verifies the result when initializing flags with install path,
+// assertInstallDirs verifies the result when initializing flags with install path,
 // which is specified with config file or flag
-func assertInstallPath(t *testing.T, expectedInstallPath string) {
+func assertInstallDirs(t *testing.T, expectedInstallDir string) {
 	sc, _, err := InitFlags(testVersion)
 	if err != nil {
 		t.Errorf("not expecting error when initializing with install config: %v", err)
 	}
-	if len(sc.InstallPath.args) != 1 {
+	if len(sc.InstallDirs.args) != 1 {
 		t.Error("expecting install path to be set")
 	}
-	if sc.InstallPath.args[0] != expectedInstallPath {
-		t.Errorf("unmatching install path args, expected %v, actual %v", expectedInstallPath, sc.InstallCommand.args)
+	if sc.InstallDirs.args[0] != expectedInstallDir {
+		t.Errorf("unmatching install path args, expected %v, actual %v", expectedInstallDir, sc.InstallCommand.args)
 	}
 }
 
@@ -422,7 +422,7 @@ func c(flagName string, flagValue string) string {
 
 // writeToConfigFile is used to write content to the config file
 func writeToConfigFile(t *testing.T, content string) {
-	if err := ioutil.WriteFile(testConfigFilePath, []byte(content), 0755); err != nil {
+	if err := ioutil.WriteFile(testConfigFileDirs, []byte(content), 0755); err != nil {
 		t.Errorf("unable to create or write to temporary file: %v, reason: %v", testStatusFile, err)
 	}
 }

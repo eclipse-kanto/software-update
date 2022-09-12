@@ -55,7 +55,7 @@ type ScriptBasedSoftwareUpdatableConfig struct {
 	ServerCert            string
 	DownloadRetryCount    int
 	DownloadRetryInterval durationTime
-	InstallPath           pathArgs
+	InstallDirs           pathArgs
 	Mode                  string
 	InstallCommand        command
 }
@@ -72,7 +72,7 @@ type ScriptBasedSoftwareUpdatable struct {
 	serverCert            string
 	downloadRetryCount    int
 	downloadRetryInterval time.Duration
-	installPath           []string
+	installDirs           []string
 	accessMode            string
 	installCommand        *command
 }
@@ -99,7 +99,7 @@ func InitScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Ed
 		// Interval between download reattempts
 		downloadRetryInterval: time.Duration(scriptSUPConfig.DownloadRetryInterval),
 		// Install locations for local artifacts
-		installPath: scriptSUPConfig.InstallPath.args,
+		installDirs: scriptSUPConfig.InstallDirs.args,
 		// Access mode for local artifacts
 		accessMode: initAccessMode(scriptSUPConfig.Mode),
 		// Define the module artifact(s) type: archive or plane

@@ -171,15 +171,13 @@ Installing:
 		}
 	} else {
 		var installScriptExtLocation string
+		isWindows := runtime.GOOS == "windows"
 		for _, sa := range module.Artifacts {
-			if runtime.GOOS == "windows" {
-				if sa.FileName == "install.bat" && storage.IsFileLink(sa.Link) && !sa.Copy {
+			if (isWindows && sa.FileName == "install.bat") || (!isWindows && sa.FileName == "install.sh") {
+				if sa.Local && !sa.Copy {
 					installScriptExtLocation = sa.Link
 					break
 				}
-			} else if sa.FileName == "install.sh" && storage.IsFileLink(sa.Link) && !sa.Copy {
-				installScriptExtLocation = sa.Link
-				break
 			}
 		}
 		if installScriptExtLocation != "" {

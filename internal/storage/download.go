@@ -185,7 +185,7 @@ func openResource(artifact *Artifact, offset int64, serverCert string, retryCoun
 }
 
 func getInput(artifact *Artifact, offset int64, serverCert string) (io.ReadCloser, bool, error) {
-	if IsFileLink(artifact.Link) { // a file
+	if artifact.Local { // a file
 		return getFileInput(artifact.Link, offset)
 	}
 

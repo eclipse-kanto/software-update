@@ -53,7 +53,7 @@ const (
 func TestUpdate(t *testing.T) {
 	su, _ := mockSoftwareUpdatable(t, hawkbit.NewConfiguration(), &testConfig{clientConnected: true})
 
-	dir := assertPath(t, testDirStatus, true)
+	dir := assertDirs(t, testDirStatus, true)
 	defer os.RemoveAll(dir)
 
 	// write initial file with progress only
@@ -94,7 +94,7 @@ func TestUpdate(t *testing.T) {
 
 // TestUpdateInvalidFolder function assert that the error is returned when update is called with missing status file
 func TestUpdateInvalidFolder(t *testing.T) {
-	dir := assertPath(t, testDirStatus, false)
+	dir := assertDirs(t, testDirStatus, false)
 	// statusFolder not created initially
 	monitorChan, err := (&monitor{
 		status: hawkbit.StatusInstalling,
@@ -151,7 +151,7 @@ func TestLoad(t *testing.T) {
 
 // assertLoad is a util function used for file content assertion by each rule and file content provided
 func assertLoad(rule, fileContent string, shallPass bool, t *testing.T) {
-	statusFile := assertPath(t, testStatusFile, false)
+	statusFile := assertDirs(t, testStatusFile, false)
 	if err := ioutil.WriteFile(statusFile, []byte(fileContent), 0755); err != nil {
 		t.Errorf("unable to create or write to temporary file: %v, reason: %v", statusFile, err)
 	}
