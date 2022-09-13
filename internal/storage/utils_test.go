@@ -27,15 +27,6 @@ type artifactData struct {
 	copy     bool
 }
 
-var (
-	partialDownload = func(progress int) bool {
-		return progress > 0 && progress < 100
-	}
-	completeDownload = func(progress int) bool {
-		return progress == 100
-	}
-)
-
 // ----- ReadLn & WriteLn ----- ----- ----- ----- ----- ----- ----- ----- -----
 
 // TestReadWriteLn tests both ReadLn and WriteLn functions.
