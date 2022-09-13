@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"runtime"
@@ -112,11 +113,16 @@ func (w *TestHTTPServer) setAlias(alias string, body string) {
 
 // AddInstallScript adds install script HTTP alias (only once).
 func (w *TestHTTPServer) AddInstallScript() {
+	name, body := GetTestInstallScript()
+	w.setAlias(name, body)
+}
+
+// GetTestInstallScript generates test install script for windows/linux
+func GetTestInstallScript() (string, string) {
 	if runtime.GOOS == "windows" {
-		w.setAlias("install.bat", "@echo off\n(\necho message=My final message!) > status\nping 127.0.0.1\n")
-	} else {
-		w.setAlias("install.sh", "#!/bin/sh\necho 'message=My final message!\n' > status\nsleep 5\n")
+		return "install.bat", "@echo off\n(\necho message=My final message!) > status\nping 127.0.0.1\n"
 	}
+	return "install.sh", "#!/bin/sh\necho 'message=My final message!\n' > status\nsleep 5\n"
 }
 
 // Close closes the http server.
@@ -199,7 +205,7 @@ func (w *TestHTTPServer) handlerSimple(writer http.ResponseWriter, request *http
 }
 
 // write file content.
-func write(writer http.ResponseWriter, size int64, corruptFile bool) {
+func write(writer io.Writer, size int64, corruptFile bool) {
 	b := []byte("11111111111111111111111111111111111111111111111111")
 	if corruptFile {
 		b[0] = '0'

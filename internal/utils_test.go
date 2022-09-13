@@ -12,8 +12,12 @@
 package feature
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -58,7 +62,16 @@ type testConfig struct {
 	mode            string
 }
 
-var testVersion = "TestVersion"
+var (
+	testVersion = "TestVersion"
+
+	partialDownload = func(progress float64) bool {
+		return progress > 0 && progress < 100
+	}
+	completeDownload = func(progress float64) bool {
+		return progress == 100
+	}
+)
 
 func assertDirs(t *testing.T, name string, create bool) string {
 	if _, err := os.Stat(name); !os.IsNotExist(err) {
@@ -265,4 +278,96 @@ func (token *mockedToken) Done() <-chan struct{} {
 // Error returns the error if set.
 func (token *mockedToken) Error() error {
 	return token.err
+}
+
+func createLocalArtifact(t *testing.T, dir, alias, body string) (string, string) {
+	t.Helper()
+
+	file := filepath.Join(dir, alias)
+	if err := storage.WriteLn(file, body); err != nil {
+		t.Fatal("error writing to file", err)
+	}
+	hType := sha256.New()
+	hType.Write([]byte(body))
+	return file, hex.EncodeToString(hType.Sum(nil))
+}
+
+func convertLocalArtifact(path, name, hash string, len int) *hawkbit.SoftwareArtifactAction {
+	return &hawkbit.SoftwareArtifactAction{
+		Filename: name,
+		Download: map[hawkbit.Protocol]*hawkbit.Links{
+			storage.ProtocolFile: {URL: path},
+		},
+		Checksums: map[hawkbit.Hash]string{
+			hawkbit.SHA256: hash,
+		},
+		Size: len,
+	}
+}
+
+func getAbsolutePath(t *testing.T, path string) string {
+	t.Helper()
+
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatalf("error getting absolute file path of %v - %v", path, err)
+	}
+	return absolutePath
+}
+
+func checkFileExistsWithContent(t *testing.T, filename, expectedContent string) {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatalf("expected file %s to be created from install script(error opening: %v)", filename, err)
+	}
+	message := strings.Trim(string(content), "\r\n")
+	if expectedContent != message {
+		t.Fatalf("wrong install script execution result, expected: %s, got: %s", expectedContent, message)
+	}
+}
+
+func checkNoFilesCopied(t *testing.T, dir string, canBeMoved bool) bool {
+	info, err := ioutil.ReadDir(dir)
+	if err != nil {
+		if canBeMoved {
+			return false
+		}
+		t.Fatalf("error reading folder %s - %v", dir, err)
+	}
+	if canBeMoved && len(info) == 0 {
+		return false
+	}
+	if len(info) != 1 {
+		t.Fatalf("expected only internal status file to be located in storage, actual number of files: %v", len(info))
+	}
+	if storage.InternalStatusName != info[0].Name() {
+		t.Fatalf("expected only internal status file to be located in storage, instead found: %s", info[0].Name())
+	}
+	return true
+}
+
+func getCopiedArtifactsCount(artifacts []*hawkbit.SoftwareArtifactAction, copy string) (count int) {
+	if len(copy) == 0 {
+		return 0
+	}
+	if copy == "*" {
+		return len(artifacts)
+	}
+	toCopy := strings.FieldsFunc(copy, storage.SplitArtifacts)
+	for _, artifact := range artifacts {
+		_, local := artifact.Download[storage.ProtocolFile]
+		if !local || contains(toCopy, artifact.Filename) {
+			count++
+		}
+	}
+	return count
+}
+
+func contains(s []string, str string) bool {
+	for _, el := range s {
+		if el == str {
+			return true
+		}
+	}
+	return false
 }
