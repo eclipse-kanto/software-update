@@ -101,6 +101,15 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, ser
 
 func resume(to string, offset int64, artifact *Artifact, progress progressBytes, serverCert string, retryCount int,
 	retryInterval time.Duration, done chan struct{}) (int64, error) {
+	if offset == int64(artifact.Size) {
+		logger.Infof("validating previously downloaded artifact: %s", to)
+		if err := validate(to, artifact.HashType, artifact.HashValue); err == nil || retryCount == 0 {
+			return 0, err
+		}
+		offset = 0 // retry download otherwise
+		retryCount--
+		time.Sleep(time.Duration(retryInterval))
+	}
 	// Send the HTTP request and get its response.
 	source, remainingRetries, resumeSupported, err := openResource(artifact, offset, serverCert, retryCount, retryInterval)
 	if err != nil {
