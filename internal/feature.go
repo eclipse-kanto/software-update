@@ -33,6 +33,9 @@ const (
 	modeStrict = "strict"
 	modeScoped = "scoped"
 	modeLax    = "lax"
+
+	typeArchive = "archive"
+	typePlain   = "plain"
 )
 
 var (
@@ -103,7 +106,7 @@ func InitScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Ed
 		installDirs: scriptSUPConfig.InstallDirs.args,
 		// Access mode for local artifacts
 		accessMode: initAccessMode(scriptSUPConfig.Mode),
-		// Define the module artifact(s) type: archive or plane
+		// Define the module artifact(s) type: archive or plain
 		artifactType: scriptSUPConfig.ArtifactType,
 		// Create queue with size 10
 		queue: make(chan operationFunc, 10),
@@ -165,6 +168,9 @@ func (scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) Validate() error {
 	}
 	if !strings.EqualFold(modeStrict, scriptSUPConfig.Mode) && !strings.EqualFold(modeScoped, scriptSUPConfig.Mode) && !strings.EqualFold(modeLax, scriptSUPConfig.Mode) {
 		return fmt.Errorf("invalid mode value, must be either strict, scoped or lax")
+	}
+	if scriptSUPConfig.ArtifactType != typeArchive && scriptSUPConfig.ArtifactType != typePlain {
+		return fmt.Errorf("invalid artifact type - (%s), must be either %s or %s", scriptSUPConfig.ArtifactType, typeArchive, typePlain)
 	}
 	return nil
 }

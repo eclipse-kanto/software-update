@@ -53,7 +53,7 @@ type cfg struct {
 	StorageLocation       string       `json:"storageLocation" def:"." descr:"Location of the storage"`
 	FeatureID             string       `json:"featureId" def:"SoftwareUpdatable" descr:"Feature identifier of SoftwareUpdatable"`
 	ModuleType            string       `json:"moduleType" def:"software" descr:"Module type of SoftwareUpdatable"`
-	ArtifactType          string       `json:"artifactType" def:"archive" descr:"Defines the module artifact type: archive or plane"`
+	ArtifactType          string       `json:"artifactType" def:"archive" descr:"Defines the module artifact type: archive or plain"`
 	Install               []string     `json:"install" descr:"Defines the absolute path to install script"`
 	ServerCert            string       `json:"serverCert" descr:"A PEM encoded certificate \"file\" for secure artifact download"`
 	DownloadRetryCount    int          `json:"downloadRetryCount" def:"0" descr:"Number of retries, in case of a failed download.\n By default no retries are supported."`

@@ -456,7 +456,7 @@ func prepareSoftwareUpdateAction(artifacts []*hawkbit.SoftwareArtifactAction, co
 		SoftwareModules: []*hawkbit.SoftwareModuleAction{{
 			SoftwareModule: &hawkbit.SoftwareModuleID{Name: "test", Version: "1.0.0"},
 			Artifacts:      artifacts,
-			Metadata:       map[string]string{"artifact-type": "plane", "copy-artifacts": copyArtifacts},
+			Metadata:       map[string]string{"artifact-type": typePlain, "copy-artifacts": copyArtifacts},
 		}},
 	}
 }

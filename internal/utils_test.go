@@ -118,8 +118,8 @@ func mockScriptBasedSoftwareUpdatable(t *testing.T, tc *testConfig) (*ScriptBase
 		store: localStorage,
 		// Build install script command
 		installCommand: &command{},
-		// Define the module artifact(s) type: archive or plane
-		artifactType: "plane",
+		// Define the module artifact(s) type: archive or plain
+		artifactType: typePlain,
 		// Define install location, where to search for artifacts
 		installDirs: tc.installDirs,
 		// Define the local file artifacts access restrictions
