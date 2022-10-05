@@ -159,7 +159,7 @@ Installing:
 	if module.Metadata != nil && module.Metadata["artifact-type"] != "" {
 		artifactType = module.Metadata["artifact-type"]
 	}
-	if artifactType == "archive" { // Extract if needed
+	if artifactType == typeArchive { // Extract if needed
 		if len(module.Artifacts) > 1 { // Only one archive/artifact is allowed in archive modules
 			opErrorMsg = errMultiArchives
 			opError = fmt.Errorf(opErrorMsg)
