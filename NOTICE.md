@@ -40,11 +40,11 @@ eclipse/ditto-clients-golang (0.0.0-20211126080925-0676267c80ac)
 * Project: https://github.com/eclipse/ditto-clients-golang
 * Source:  https://github.com/eclipse/ditto-clients-golang/tree/0676267c80ac5f68495127b66a95535075bd4bd6
 
-eclipse/paho.mqtt.golang (1.3.5)
+eclipse/paho.mqtt.golang (1.4.1)
 
-* License: Eclipse Public License v2.0
+* License: Eclipse Distribution License v1.0
 * Project: https://github.com/eclipse/paho.mqtt.golang
-* Source:  https://github.com/eclipse/paho.mqtt.golang/releases/tag/v1.3.5
+* Source:  https://github.com/eclipse/paho.mqtt.golang/releases/tag/v1.4.1
 
 fsnotify/fsnotify (1.5.1)
 
@@ -81,6 +81,12 @@ golang.org/x/net (0.0.0-20211123203042-d83791d6bcd9)
 * License: BSD 3-Clause "New" or "Revised" License
 * Project: https://pkg.go.dev/golang.org/x/net
 * Source:  https://github.com/golang/net/tree/d83791d6bcd9ec2bdaacd08f4da4718370382c74
+
+golang.org/x/sync (v0.0.0-20210220032951-036812b2e83c)
+
+* License: BSD 3-Clause "New" or "Revised" License
+* Project: https://github.com/golang/sync
+* Source:  https://github.com/golang/sync/tree/036812b2e83c0ddf193dd5a34e034151da389d09
 
 golang.org/x/sys (0.0.0-20211124211545-fe61309f8881)
 
