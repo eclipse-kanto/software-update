@@ -59,7 +59,7 @@ type Module struct {
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
-// An Artifact represents a SoftwareArtifactAction where checksums are simplified to hashType and hashValue.
+// Artifact represents a SoftwareArtifactAction where checksums are simplified to hashType and hashValue.
 // Hash priority is as follow:
 //  1. checksums#SHA256
 //  2. checksums#SHA1
