@@ -104,18 +104,23 @@ func (su *SoftwareUpdatable) processCancelRemove(requestID string, msg *protocol
 
 func (su *SoftwareUpdatable) prepare(requestID string, msg *protocol.Envelope, operation string, to interface{}) bool {
 	DEBUG.Printf("Parse message value: %v", msg.Value)
+	respReq := msg.Headers.IsResponseRequired()
 	bytes, err := json.Marshal(msg.Value)
 	if err == nil {
 		err = json.Unmarshal(bytes, to)
 	}
 	if err == nil {
-		su.reply(requestID, msg.Headers.CorrelationID(), operation, 204, nil)
+		if respReq {
+			su.reply(requestID, msg.Headers.CorrelationID(), operation, 204, nil)
+		}
 		DEBUG.Printf("Start %s operation with id: %s", operation, msg.Headers.CorrelationID())
 		return true
 	}
 	supErr := newMessagesParameterInvalidError(err.Error())
 	ERROR.Println(fmt.Errorf("failed to parse message value: %v", supErr))
-	su.reply(requestID, msg.Headers.CorrelationID(), operation, supErr.Status, supErr)
+	if respReq {
+		su.reply(requestID, msg.Headers.CorrelationID(), operation, supErr.Status, supErr)
+	}
 	return false
 }
 
