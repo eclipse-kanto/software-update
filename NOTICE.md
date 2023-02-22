@@ -76,11 +76,11 @@ golang/go (1.19.4)
 * Project: https://github.com/golang/go
 * Source:  https://github.com/golang/go/releases/tag/go1.19.4
 
-golang.org/x/net (0.0.0-20211123203042-d83791d6bcd9)
+golang.org/x/net (v0.7.0)
 
 * License: BSD 3-Clause "New" or "Revised" License
 * Project: https://pkg.go.dev/golang.org/x/net
-* Source:  https://github.com/golang/net/tree/d83791d6bcd9ec2bdaacd08f4da4718370382c74
+* Source:  https://github.com/golang/net/tree/v0.7.0
 
 golang.org/x/sync (v0.0.0-20210220032951-036812b2e83c)
 
@@ -88,11 +88,11 @@ golang.org/x/sync (v0.0.0-20210220032951-036812b2e83c)
 * Project: https://github.com/golang/sync
 * Source:  https://github.com/golang/sync/tree/036812b2e83c0ddf193dd5a34e034151da389d09
 
-golang.org/x/sys (0.0.0-20211124211545-fe61309f8881)
+golang.org/x/sys (v0.5.0)
 
 * License: BSD 3-Clause "New" or "Revised" License
 * Project: https://pkg.go.dev/golang.org/x/sys
-* Source:  https://github.com/golang/sys/tree/fe61309f888157de161a48facf03d9412635cffe
+* Source:  https://github.com/golang/sys/tree/v0.5.0
 
 ## Cryptography
 
