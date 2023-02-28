@@ -41,5 +41,5 @@ jobs:
           go vet ./...
       - name: Test
         run: |
-          go test ./... -coverprofile coverage.out -covermode count
+          go test ./... -coverprofile coverage.out -covermode count -tags=unit
           go tool cover -func coverage.out
