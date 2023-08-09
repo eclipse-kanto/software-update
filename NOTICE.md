@@ -70,11 +70,11 @@ natefinch/lumberjack (2.0.0)
 * Project: https://gopkg.in/natefinch/lumberjack
 * Source:  https://github.com/natefinch/lumberjack/releases/tag/v2.0.0
 
-golang/go (1.19.4)
+golang/go (1.21.0)
 
 * License: BSD 3-Clause "New" or "Revised" License
 * Project: https://github.com/golang/go
-* Source:  https://github.com/golang/go/releases/tag/go1.19.4
+* Source:  https://github.com/golang/go/releases/tag/go1.21.0
 
 golang.org/x/net (v0.7.0)
 
