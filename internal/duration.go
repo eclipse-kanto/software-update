@@ -18,39 +18,49 @@ import (
 	"time"
 )
 
-// durationTime is custom type of type time.Duration in order to add json unmarshal support
-type durationTime time.Duration
+// DurationTime is custom type of type time.Duration in order to add json unmarshal support
+type DurationTime struct {
+	time.Duration
+}
 
-// UnmarshalJSON unmarshal durationTime type
-func (d *durationTime) UnmarshalJSON(b []byte) error {
+// UnmarshalJSON unmarshal DurationTime type
+func (d *DurationTime) UnmarshalJSON(b []byte) error {
 	var v interface{}
 	if err := json.Unmarshal(b, &v); err != nil {
 		return err
 	}
-	switch value := v.(type) {
 
+	switch value := v.(type) {
+	case float64:
+		d.Duration = time.Duration(value) * time.Second
+		return nil
 	case string:
-		duration, err := time.ParseDuration(value)
+		var err error
+		d.Duration, err = time.ParseDuration(value)
 		if err != nil {
 			return err
 		}
-		*d = durationTime(duration)
 	default:
 		return errors.New("invalid duration")
 	}
 	return nil
 }
 
+// MarshalJSON supports marshalling to '50s' string format.
+func (d DurationTime) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.String())
+}
+
 // Set durationTime from string, used for flag set
-func (d *durationTime) Set(s string) error {
+func (d *DurationTime) Set(s string) error {
 	v, err := time.ParseDuration(s)
 	if err != nil {
 		err = errors.New("parse error")
 	}
-	*d = durationTime(v)
+	d.Duration = v
 	return err
 }
 
-func (d durationTime) String() string {
-	return time.Duration(d).String()
+func (d DurationTime) String() string {
+	return d.Duration.String()
 }

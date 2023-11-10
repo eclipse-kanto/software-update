@@ -27,8 +27,29 @@ import (
 )
 
 const (
-	defaultDisconnectTimeout = 250 * time.Millisecond
-	defaultKeepAlive         = 20 * time.Second
+	defaultDisconnectTimeout     = 250 * time.Millisecond
+	defaultKeepAlive             = 20 * time.Second
+	defaultBroker                = "tcp://localhost:1883"
+	defaultUsername              = ""
+	defaultPassword              = ""
+	defaultCACert                = ""
+	defaultCert                  = ""
+	defaultKey                   = ""
+	defaultStorageLocation       = "./"
+	defaultFeatureID             = "SoftwareUpdatable"
+	defaultModuleType            = "software"
+	defaultArtifactType          = "archive"
+	defaultServerCert            = ""
+	defaultDownloadRetryCount    = 0
+	defaultDownloadRetryInterval = 5
+	defaultInstallDirs           = ""
+	defaultMode                  = ""
+	defaultInstallCommand        = ""
+	logFileDefault               = ""
+	logLevelDefault              = "INFO"
+	logFileSizeDefault           = 2
+	logFileCountDefault          = 5
+	logFileMaxAgeDefault         = 28
 
 	modeStrict = "strict"
 	modeScoped = "scoped"
@@ -49,19 +70,22 @@ type operationFunc func() bool
 
 // ScriptBasedSoftwareUpdatableConfig provides the Script-Based SoftwareUpdatable configuration.
 type ScriptBasedSoftwareUpdatableConfig struct {
-	Broker                string
-	Username              string
-	Password              string
-	StorageLocation       string
-	FeatureID             string
-	ModuleType            string
-	ArtifactType          string
-	ServerCert            string
-	DownloadRetryCount    int
-	DownloadRetryInterval durationTime
-	InstallDirs           pathArgs
-	Mode                  string
-	InstallCommand        command
+	Broker                string       `json:"broker,omitempty"`
+	Username              string       `json:"username,omitempty"`
+	Password              string       `json:"password,omitempty"`
+	CACert                string       `json:"caCert,omitempty"`
+	Cert                  string       `json:"cert,omitempty"`
+	Key                   string       `json:"key,omitempty"`
+	StorageLocation       string       `json:"storageLocation,omitempty"`
+	FeatureID             string       `json:"featureId,omitempty"`
+	ModuleType            string       `json:"moduleType,omitempty"`
+	ArtifactType          string       `json:"artifactType,omitempty"`
+	ServerCert            string       `json:"serverCert,omitempty"`
+	DownloadRetryCount    int          `json:"downloadRetryCount,omitempty"`
+	DownloadRetryInterval DurationTime `json:"downloadRetryInterval,omitempty"`
+	InstallDirs           []string     `json:"installDirs,omitempty"`
+	Mode                  string       `json:"mode,omitempty"`
+	InstallCommand        Command      `json:"install,omitempty"`
 }
 
 // ScriptBasedSoftwareUpdatable is the Script-Based SoftwareUpdatable actual implementation.
@@ -78,7 +102,44 @@ type ScriptBasedSoftwareUpdatable struct {
 	downloadRetryInterval time.Duration
 	installDirs           []string
 	accessMode            string
-	installCommand        *command
+	installCommand        *Command
+}
+
+// BasicConfig combine ScriptBaseSoftwareUpdatable configuration and Log configuration
+type BasicConfig struct {
+	ScriptBasedSoftwareUpdatableConfig
+	logger.LogConfig
+	ConfigFile string `json:"configFile,omitempty"`
+}
+
+// NewDefaultConfig returns a default mqtt client connection config instance
+func NewDefaultConfig() *BasicConfig {
+	return &BasicConfig{
+		ScriptBasedSoftwareUpdatableConfig: ScriptBasedSoftwareUpdatableConfig{
+			Broker:                defaultBroker,
+			Username:              defaultUsername,
+			Password:              defaultPassword,
+			CACert:                defaultCACert,
+			Cert:                  defaultCert,
+			Key:                   defaultKey,
+			StorageLocation:       defaultStorageLocation,
+			FeatureID:             defaultFeatureID,
+			ModuleType:            defaultModuleType,
+			ArtifactType:          defaultArtifactType,
+			ServerCert:            defaultServerCert,
+			DownloadRetryCount:    defaultDownloadRetryCount,
+			Mode:                  initAccessMode(defaultMode),
+			DownloadRetryInterval: DurationTime{defaultDownloadRetryInterval * time.Second},
+			InstallDirs:           make([]string, 0),
+		},
+		LogConfig: logger.LogConfig{
+			LogFile:       logFileDefault,
+			LogLevel:      logLevelDefault,
+			LogFileSize:   logFileSizeDefault,
+			LogFileCount:  logFileCountDefault,
+			LogFileMaxAge: logFileMaxAgeDefault,
+		},
+	}
 }
 
 // InitScriptBasedSU creates a new Script-Based SoftwareUpdatable instance, listening for edge configuration.
@@ -101,9 +162,9 @@ func InitScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Ed
 		// Number of download reattempts
 		downloadRetryCount: scriptSUPConfig.DownloadRetryCount,
 		// Interval between download reattempts
-		downloadRetryInterval: time.Duration(scriptSUPConfig.DownloadRetryInterval),
+		downloadRetryInterval: scriptSUPConfig.DownloadRetryInterval.Duration,
 		// Install locations for local artifacts
-		installDirs: scriptSUPConfig.InstallDirs.args,
+		installDirs: scriptSUPConfig.InstallDirs,
 		// Access mode for local artifacts
 		accessMode: initAccessMode(scriptSUPConfig.Mode),
 		// Define the module artifact(s) type: archive or plain
