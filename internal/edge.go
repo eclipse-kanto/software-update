@@ -14,10 +14,8 @@ package feature
 
 import (
 	"encoding/json"
-	"net/url"
 
 	"github.com/eclipse-kanto/software-update/internal/logger"
-	"github.com/eclipse-kanto/software-update/internal/util/tls"
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
@@ -60,18 +58,6 @@ func newEdgeConnector(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig, ecl e
 	if len(scriptSUPConfig.Username) > 0 {
 		opts = opts.SetUsername(scriptSUPConfig.Username).SetPassword(scriptSUPConfig.Password)
 	}
-	u, err := url.Parse(scriptSUPConfig.Broker)
-	if err != nil {
-		return nil, err
-	}
-
-	if isConnectionSecure(u.Scheme) {
-		tlsConfig, err := tls.NewTLSConfig(scriptSUPConfig.CACert, scriptSUPConfig.Cert, scriptSUPConfig.Key)
-		if err != nil {
-			return nil, err
-		}
-		opts.SetTLSConfig(tlsConfig)
-	}
 
 	p := &EdgeConnector{mqttClient: MQTT.NewClient(opts), edgeClient: ecl}
 	if token := p.mqttClient.Connect(); token.Wait() && token.Error() != nil {
@@ -110,15 +96,6 @@ func newEdgeConnector(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig, ecl e
 		return nil, token.Error()
 	}
 	return p, nil
-}
-
-func isConnectionSecure(schema string) bool {
-	switch schema {
-	case "wss", "ssl", "tls", "mqtts", "mqtt+ssl", "tcps":
-		return true
-	default:
-	}
-	return false
 }
 
 // Close the EdgeConnector
