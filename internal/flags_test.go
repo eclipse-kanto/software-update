@@ -131,9 +131,6 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 	// 3. Test with all flags are applied instead of default values if no configuration JSON is provided
 	expectedFlagBroker := "host:1234"
 	expectedArtifact := "TestArchive"
-	expectedCACert := "TestCaCert.crt"
-	expectedCert := "TestCert.cert"
-	expectedKey := "TestKey.key"
 	expectedFeatureID := "TestFeature"
 	expectedInstall := "TestInstall"
 	expectedServerCert := "TestCert"
@@ -155,9 +152,6 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 	setFlags([]string{
 		c(flagBroker, expectedFlagBroker),
 		c(flagArtifactType, expectedArtifact),
-		c(flagCACert, expectedCACert),
-		c(flagCert, expectedCert),
-		c(flagKey, expectedKey),
 		c(flagFeatureID, expectedFeatureID),
 		c(flagInstall, expectedInstall),
 		c(flagServerCert, expectedServerCert),
@@ -186,9 +180,6 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 		Broker:                expectedFlagBroker,
 		Username:              expectedUsername,
 		Password:              expectedPassword,
-		CACert:                expectedCACert,
-		Cert:                  expectedCert,
-		Key:                   expectedKey,
 		ServerCert:            expectedServerCert,
 		StorageLocation:       expectedStorageLocation,
 		InstallCommand:        Command{cmd: expectedInstall},
@@ -362,9 +353,6 @@ func assertSoftwareUpdatable(t *testing.T, actual, expected ScriptBasedSoftwareU
 	assertString(t, actual.Broker, expected.Broker)
 	assertString(t, actual.Username, expected.Username)
 	assertString(t, actual.Password, expected.Password)
-	assertString(t, actual.CACert, expected.CACert)
-	assertString(t, actual.Cert, expected.Cert)
-	assertString(t, actual.Key, expected.Key)
 	assertString(t, actual.ServerCert, expected.ServerCert)
 	assertString(t, actual.StorageLocation, expected.StorageLocation)
 	assertInt(t, actual.DownloadRetryCount, expected.DownloadRetryCount)
