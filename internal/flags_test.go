@@ -182,7 +182,7 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 		Password:              expectedPassword,
 		ServerCert:            expectedServerCert,
 		StorageLocation:       expectedStorageLocation,
-		InstallCommand:        Command{cmd: expectedInstall},
+		InstallCommand:        command{cmd: expectedInstall},
 		DownloadRetryCount:    expectedDownloadRetryCount,
 		DownloadRetryInterval: getDurationTime(t, expectedDownloadRetryInterval),
 		InstallDirs:           []string{expectedInstallDir},
@@ -444,7 +444,7 @@ func resetArgs() {
 	}()
 }
 
-func getDurationTime(t *testing.T, defaultValue string) (result DurationTime) {
+func getDurationTime(t *testing.T, defaultValue string) (result durationTime) {
 	err := result.Set(defaultValue)
 	if err != nil {
 		t.Fatalf("unable to get duration time from %s", defaultValue)

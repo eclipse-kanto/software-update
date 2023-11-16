@@ -19,6 +19,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/eclipse-kanto/software-update/internal/logger"
 )
@@ -56,7 +57,7 @@ func InitFlags(flagSet *flag.FlagSet, cfg *BasicConfig) {
 	flagSet.StringVar(&cfg.ArtifactType, "artifactType", cfg.ArtifactType, "Defines the module artifact type: archive or plain")
 	flagSet.StringVar(&cfg.ServerCert, "serverCert", cfg.ServerCert, "A PEM encoded certificate 'file' for secure artifact download")
 	flagSet.IntVar(&cfg.DownloadRetryCount, "downloadRetryCount", cfg.DownloadRetryCount, "Number of retries, in case of a failed download. By default no retries are supported.")
-	flagSet.DurationVar(&cfg.DownloadRetryInterval.Duration, "downloadRetryInterval", cfg.DownloadRetryInterval.Duration, "Interval between retries, in case of a failed download. Should be a sequence of decimal numbers, each with optional fraction and a unit suffix, such as '300ms', '1.5h', '10m30s', etc. Valid time units are 'ns', 'us' (or 'µs'), 'ms', 's', 'm', 'h'")
+	flagSet.DurationVar((*time.Duration)(&cfg.DownloadRetryInterval), "downloadRetryInterval", (time.Duration)(cfg.DownloadRetryInterval), "Interval between retries, in case of a failed download. Should be a sequence of decimal numbers, each with optional fraction and a unit suffix, such as '300ms', '1.5h', '10m30s', etc. Valid time units are 'ns', 'us' (or 'µs'), 'ms', 's', 'm', 'h'")
 
 	flagSet.StringVar(&cfg.Mode, "mode", cfg.Mode, modeDescription)
 
@@ -104,7 +105,7 @@ func parseFlags(cfg *BasicConfig, version string) {
 	flag2 := "--" + flagInstall
 	for _, arg := range args {
 		if strings.HasPrefix(arg, flag1+"=") || strings.HasPrefix(arg, flag2+"=") {
-			cfg.InstallCommand = Command{}
+			cfg.InstallCommand = command{}
 			break
 		}
 	}

@@ -23,22 +23,22 @@ import (
 	"github.com/eclipse-kanto/software-update/internal/logger"
 )
 
-// Command is custom type of command name and arguments of command in order to add json unmarshal support
-type Command struct {
+// command is custom type of command name and arguments of command in order to add json unmarshal support
+type command struct {
 	cmd  string
 	args []string
 }
 
 // String is representation of Command as combination of name and arguments of the command
-func (i *Command) String() string {
+func (i *command) String() string {
 	if len(i.args) == 0 {
 		return i.cmd
 	}
 	return fmt.Sprint(i.cmd, " ", strings.Join(i.args, " "))
 }
 
-// Set Command from string, used for flag set
-func (i *Command) Set(value string) error {
+// Set command from string, used for flag set
+func (i *command) Set(value string) error {
 	if i.cmd == "" {
 		i.setCommand(value)
 	} else {
@@ -47,7 +47,7 @@ func (i *Command) Set(value string) error {
 	return nil
 }
 
-func (i *Command) setCommand(value string) {
+func (i *command) setCommand(value string) {
 	i.cmd = value
 	i.args = []string{}
 	if runtime.GOOS != "windows" && strings.HasSuffix(value, ".sh") {
@@ -56,7 +56,7 @@ func (i *Command) setCommand(value string) {
 	}
 }
 
-func (i *Command) run(dir string, def string) (err error) {
+func (i *command) run(dir string, def string) (err error) {
 	script := i.cmd
 	args := i.args
 	if script == "" {
@@ -81,7 +81,7 @@ func (i *Command) run(dir string, def string) (err error) {
 }
 
 // UnmarshalJSON unmarshal Command type
-func (i *Command) UnmarshalJSON(b []byte) error {
+func (i *command) UnmarshalJSON(b []byte) error {
 	var v []string
 	if err := json.Unmarshal(b, &v); err != nil {
 		return err
@@ -95,9 +95,4 @@ func (i *Command) UnmarshalJSON(b []byte) error {
 		}
 	}
 	return nil
-}
-
-// MarshalJSON supports marshalling to string format.
-func (i Command) MarshalJSON() ([]byte, error) {
-	return json.Marshal(i.String())
 }

@@ -20,8 +20,6 @@ import (
 // StringSliceV represents slice of strings flag value.
 type StringSliceV struct {
 	value *[]string
-
-	provided bool
 }
 
 // NewStringSliceV creates new flag variable for slice of strings definition.
@@ -29,11 +27,6 @@ func NewStringSliceV(setter *[]string) *StringSliceV {
 	return &StringSliceV{
 		value: setter,
 	}
-}
-
-// Provided returns true if the flag value is provided.
-func (f *StringSliceV) Provided() bool {
-	return f.provided
 }
 
 // String returns the flag string value.
@@ -44,21 +37,11 @@ func (f *StringSliceV) String() string {
 	return strings.Join(*f.value, " ")
 }
 
-// Get returns the flag converted value.
-func (f *StringSliceV) Get() interface{} {
-	v := make([]string, 0)
-	if f.value != nil {
-		v = append(v, *f.value...)
-	}
-	return v
-}
-
 // Set validates and applies the provided value if no error.
 func (f *StringSliceV) Set(value string) error {
 	if len(value) == 0 {
 		return fmt.Errorf("value cannot be empty")
 	}
-	f.provided = true
 	*f.value = strings.Fields(value)
 	return nil
 }

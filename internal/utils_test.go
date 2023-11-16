@@ -118,7 +118,7 @@ func mockScriptBasedSoftwareUpdatable(t *testing.T, tc *testConfig) (*ScriptBase
 	feature := &ScriptBasedSoftwareUpdatable{
 		store: localStorage,
 		// Build install script command
-		installCommand: &Command{},
+		installCommand: &command{},
 		// Define the module artifact(s) type: archive or plain
 		artifactType: typePlain,
 		// Define install location, where to search for artifacts

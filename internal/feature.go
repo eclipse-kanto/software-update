@@ -27,33 +27,33 @@ import (
 )
 
 const (
-	defaultDisconnectTimeout     = 250 * time.Millisecond
-	defaultKeepAlive             = 20 * time.Second
-	defaultBroker                = "tcp://localhost:1883"
-	defaultUsername              = ""
-	defaultPassword              = ""
-	defaultStorageLocation       = "./"
-	defaultFeatureID             = "SoftwareUpdatable"
-	defaultModuleType            = "software"
-	defaultArtifactType          = "archive"
-	defaultServerCert            = ""
-	defaultDownloadRetryCount    = 0
-	defaultDownloadRetryInterval = 5
-	defaultInstallDirs           = ""
-	defaultMode                  = ""
-	defaultInstallCommand        = ""
-	logFileDefault               = ""
-	logLevelDefault              = "INFO"
-	logFileSizeDefault           = 2
-	logFileCountDefault          = 5
-	logFileMaxAgeDefault         = 28
-
 	modeStrict = "strict"
 	modeScoped = "scoped"
 	modeLax    = "lax"
 
 	typeArchive = "archive"
 	typePlain   = "plain"
+
+	defaultDisconnectTimeout     = 250 * time.Millisecond
+	defaultKeepAlive             = 20 * time.Second
+	defaultBroker                = "tcp://localhost:1883"
+	defaultUsername              = ""
+	defaultPassword              = ""
+	defaultStorageLocation       = "."
+	defaultFeatureID             = "SoftwareUpdatable"
+	defaultModuleType            = "software"
+	defaultArtifactType          = "archive"
+	defaultServerCert            = ""
+	defaultDownloadRetryCount    = 0
+	defaultDownloadRetryInterval = "5s"
+	defaultInstallDirs           = ""
+	defaultMode                  = modeStrict
+	defaultInstallCommand        = ""
+	defaultLogFile               = "log/software-update.log"
+	defaultLogLevel              = "INFO"
+	defaultLogFileSize           = 2
+	defaultLogFileCount          = 5
+	defaultLogFileMaxAge         = 28
 )
 
 var (
@@ -76,10 +76,10 @@ type ScriptBasedSoftwareUpdatableConfig struct {
 	ArtifactType          string       `json:"artifactType,omitempty"`
 	ServerCert            string       `json:"serverCert,omitempty"`
 	DownloadRetryCount    int          `json:"downloadRetryCount,omitempty"`
-	DownloadRetryInterval DurationTime `json:"downloadRetryInterval,omitempty"`
+	DownloadRetryInterval durationTime `json:"downloadRetryInterval,omitempty"`
 	InstallDirs           []string     `json:"installDirs,omitempty"`
 	Mode                  string       `json:"mode,omitempty"`
-	InstallCommand        Command      `json:"install,omitempty"`
+	InstallCommand        command      `json:"install,omitempty"`
 }
 
 // ScriptBasedSoftwareUpdatable is the Script-Based SoftwareUpdatable actual implementation.
@@ -96,7 +96,7 @@ type ScriptBasedSoftwareUpdatable struct {
 	downloadRetryInterval time.Duration
 	installDirs           []string
 	accessMode            string
-	installCommand        *Command
+	installCommand        *command
 }
 
 // BasicConfig combine ScriptBaseSoftwareUpdatable configuration and Log configuration
@@ -108,6 +108,10 @@ type BasicConfig struct {
 
 // NewDefaultConfig returns a default mqtt client connection config instance
 func NewDefaultConfig() *BasicConfig {
+	duration, err := time.ParseDuration(defaultDownloadRetryInterval)
+	if err != nil {
+		duration = 0
+	}
 	return &BasicConfig{
 		ScriptBasedSoftwareUpdatableConfig: ScriptBasedSoftwareUpdatableConfig{
 			Broker:                defaultBroker,
@@ -119,16 +123,16 @@ func NewDefaultConfig() *BasicConfig {
 			ArtifactType:          defaultArtifactType,
 			ServerCert:            defaultServerCert,
 			DownloadRetryCount:    defaultDownloadRetryCount,
-			Mode:                  initAccessMode(defaultMode),
-			DownloadRetryInterval: DurationTime{defaultDownloadRetryInterval * time.Second},
+			Mode:                  defaultMode,
+			DownloadRetryInterval: durationTime(duration),
 			InstallDirs:           make([]string, 0),
 		},
 		LogConfig: logger.LogConfig{
-			LogFile:       logFileDefault,
-			LogLevel:      logLevelDefault,
-			LogFileSize:   logFileSizeDefault,
-			LogFileCount:  logFileCountDefault,
-			LogFileMaxAge: logFileMaxAgeDefault,
+			LogFile:       defaultLogFile,
+			LogLevel:      defaultLogLevel,
+			LogFileSize:   defaultLogFileSize,
+			LogFileCount:  defaultLogFileCount,
+			LogFileMaxAge: defaultLogFileMaxAge,
 		},
 	}
 }
@@ -153,7 +157,7 @@ func InitScriptBasedSU(scriptSUPConfig *ScriptBasedSoftwareUpdatableConfig) (*Ed
 		// Number of download reattempts
 		downloadRetryCount: scriptSUPConfig.DownloadRetryCount,
 		// Interval between download reattempts
-		downloadRetryInterval: scriptSUPConfig.DownloadRetryInterval.Duration,
+		downloadRetryInterval: time.Duration(scriptSUPConfig.DownloadRetryInterval),
 		// Install locations for local artifacts
 		installDirs: scriptSUPConfig.InstallDirs,
 		// Access mode for local artifacts
