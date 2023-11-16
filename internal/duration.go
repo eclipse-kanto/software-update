@@ -21,7 +21,7 @@ import (
 // durationTime is custom type of type time.Duration in order to add json unmarshal support
 type durationTime time.Duration
 
-// UnmarshalJSON unmarshal DurationTime type
+// UnmarshalJSON unmarshal durationTime type
 func (d *durationTime) UnmarshalJSON(b []byte) error {
 	var v interface{}
 	if err := json.Unmarshal(b, &v); err != nil {
