@@ -19,11 +19,11 @@ import (
 	"testing"
 )
 
-func TestStringSliceVIsSet(t *testing.T) {
+func TestPathArgsIsSet(t *testing.T) {
 	f := flag.NewFlagSet("testing", flag.ContinueOnError)
 
 	var s []string
-	v := NewStringSliceV(&s)
+	v := NewPathArgs(&s)
 	f.Var(v, "S", "S")
 
 	args := []string{"-S=a b"}
@@ -42,12 +42,12 @@ func TestStringSliceVIsSet(t *testing.T) {
 	}
 }
 
-func TestStringSliceVInvalid(t *testing.T) {
+func TestPathArgsInvalid(t *testing.T) {
 	f := flag.NewFlagSet("testing", flag.ContinueOnError)
 	f.SetOutput(io.Discard)
 
 	var s []string
-	v := NewStringSliceV(&s)
+	v := NewPathArgs(&s)
 	f.Var(v, "S", "S")
 
 	args := []string{"-S="}

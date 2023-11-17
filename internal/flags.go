@@ -62,7 +62,7 @@ func InitFlags(flagSet *flag.FlagSet, cfg *BasicConfig) {
 	flagSet.StringVar(&cfg.Mode, "mode", cfg.Mode, modeDescription)
 
 	flagSet.Var(&cfg.InstallCommand, flagInstall, "Defines the absolute path to install script")
-	flagSet.Var(NewStringSliceV(&cfg.InstallDirs), "installDirs", "Local file system directories, where to search for module artifacts")
+	flagSet.Var(NewPathArgs(&cfg.InstallDirs), "installDirs", "Local file system directories, where to search for module artifacts")
 	flagSet.StringVar(&cfg.ConfigFile, flagConfigFile, cfg.ConfigFile, "Defines the configuration file")
 }
 

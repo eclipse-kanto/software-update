@@ -29,7 +29,7 @@ type command struct {
 	args []string
 }
 
-// String is representation of Command as combination of name and arguments of the command
+// String is representation of command as combination of name and arguments of the command
 func (i *command) String() string {
 	if len(i.args) == 0 {
 		return i.cmd
@@ -80,7 +80,7 @@ func (i *command) run(dir string, def string) (err error) {
 	return err
 }
 
-// UnmarshalJSON unmarshal Command type
+// UnmarshalJSON unmarshal command type
 func (i *command) UnmarshalJSON(b []byte) error {
 	var v []string
 	if err := json.Unmarshal(b, &v); err != nil {
