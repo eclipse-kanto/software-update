@@ -35,10 +35,3 @@ func (a *pathArgs) Set(value string) error {
 	*a.args = strings.Fields(value)
 	return nil
 }
-
-// NewPathArgs creates new flag variable for slice of strings definition.
-func NewPathArgs(setter *[]string) *pathArgs {
-	return &pathArgs{
-		args: setter,
-	}
-}
