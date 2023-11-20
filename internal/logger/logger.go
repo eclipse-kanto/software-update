@@ -28,11 +28,11 @@ import (
 
 // LogConfig represents a log configuration.
 type LogConfig struct {
-	LogFile       string
-	LogLevel      string
-	LogFileSize   int
-	LogFileCount  int
-	LogFileMaxAge int
+	LogFile       string `json:"logFile,omitempty"`
+	LogLevel      string `json:"logLevel,omitempty"`
+	LogFileSize   int    `json:"logFileSize,omitempty"`
+	LogFileCount  int    `json:"logFileCount,omitempty"`
+	LogFileMaxAge int    `json:"logFileMaxAge,omitempty"`
 }
 
 // LogLevel represents a log level.
