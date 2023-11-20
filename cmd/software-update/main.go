@@ -25,23 +25,23 @@ var version = "N/A"
 
 func main() {
 	// Initialize flags.
-	suConfig, logConfig, err := feature.InitFlags(version)
+	cfg, err := feature.LoadConfig(version)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
 	// Initialize logs.
-	loggerOut := logger.SetupLogger(logConfig)
+	loggerOut := logger.SetupLogger(&cfg.LogConfig)
 	defer loggerOut.Close()
 
-	if err := suConfig.Validate(); err != nil {
+	if err := cfg.Validate(); err != nil {
 		logger.Errorf("failed to validate script-based software updatable configuration: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Create new Script-Based software updatable
-	edgeCtr, err := feature.InitScriptBasedSU(suConfig)
+	edgeCtr, err := feature.InitScriptBasedSU(&cfg.ScriptBasedSoftwareUpdatableConfig)
 	if err != nil {
 		logger.Errorf("failed to create script-based software updatable: %v", err)
 		os.Exit(1)

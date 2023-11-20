@@ -13,6 +13,7 @@
 package feature
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -22,11 +23,13 @@ import (
 	"github.com/eclipse-kanto/software-update/internal/logger"
 )
 
+// command is custom type of command name and arguments of command in order to add json unmarshal support
 type command struct {
 	cmd  string
 	args []string
 }
 
+// String is representation of command as combination of name and arguments of the command
 func (i *command) String() string {
 	if len(i.args) == 0 {
 		return i.cmd
@@ -34,18 +37,23 @@ func (i *command) String() string {
 	return fmt.Sprint(i.cmd, " ", strings.Join(i.args, " "))
 }
 
+// Set command from string, used for flag set
 func (i *command) Set(value string) error {
 	if i.cmd == "" {
-		i.cmd = value
-		i.args = []string{}
-		if runtime.GOOS != "windows" && strings.HasSuffix(value, ".sh") {
-			i.cmd = "/bin/sh"
-			i.args = []string{value}
-		}
+		i.setCommand(value)
 	} else {
 		i.args = append(i.args, value)
 	}
 	return nil
+}
+
+func (i *command) setCommand(value string) {
+	i.cmd = value
+	i.args = []string{}
+	if runtime.GOOS != "windows" && strings.HasSuffix(value, ".sh") {
+		i.cmd = "/bin/sh"
+		i.args = []string{value}
+	}
 }
 
 func (i *command) run(dir string, def string) (err error) {
@@ -70,4 +78,21 @@ func (i *command) run(dir string, def string) (err error) {
 		err = c.Run()
 	}
 	return err
+}
+
+// UnmarshalJSON unmarshal command type
+func (i *command) UnmarshalJSON(b []byte) error {
+	var v []string
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+
+	for num, elem := range v {
+		if num == 0 {
+			i.setCommand(elem)
+		} else {
+			i.args = append(i.args, elem)
+		}
+	}
+	return nil
 }

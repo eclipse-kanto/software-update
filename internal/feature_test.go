@@ -99,9 +99,9 @@ func TestScriptBasedInitLoadDependencies(t *testing.T) {
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable with error for loading install dependencies
 	_, _, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
-		clientConnected: true, storageLocation: dir, featureID: getDefaultFlagValue(t, flagFeatureID)})
+		clientConnected: true, storageLocation: dir, featureID: NewDefaultConfig().FeatureID})
 	if err == nil {
-		t.Fatalf("expected to fail when mandatory field is missing in insalled dept file")
+		t.Fatalf("expected to fail when mandatory field is missing in installed dept file")
 	}
 }
 
@@ -114,7 +114,7 @@ func TestScriptBasedInit(t *testing.T) {
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable with error for not connected client
 	_, _, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
-		clientConnected: false, storageLocation: dir, featureID: getDefaultFlagValue(t, flagFeatureID)})
+		clientConnected: false, storageLocation: dir, featureID: NewDefaultConfig().FeatureID})
 	if err == nil {
 		t.Fatal("ditto Client shall not be connected!")
 	}
@@ -150,7 +150,7 @@ func testScriptBasedSoftwareUpdatableOperations(noResume bool, t *testing.T) {
 
 	// 1. Try to init a new ScriptBasedSoftwareUpdatable.
 	feature, mc, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
-		clientConnected: true, featureID: getDefaultFlagValue(t, flagFeatureID), storageLocation: dir})
+		clientConnected: true, featureID: NewDefaultConfig().FeatureID, storageLocation: dir})
 	if err != nil {
 		t.Fatalf("failed to initialize ScriptBasedSoftwareUpdatable: %v", err)
 	}
@@ -195,7 +195,7 @@ func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, 
 
 	statuses = append(statuses, pullStatusChanges(mc, postDisconnectEventCount)...)
 	waitDisconnect.Wait()
-	defer connectFeature(t, mc, feature, getDefaultFlagValue(t, flagFeatureID))
+	defer connectFeature(t, mc, feature, NewDefaultConfig().FeatureID)
 	if install {
 		checkInstallStatusEvents(0, statuses, t)
 	} else {
@@ -212,7 +212,7 @@ func TestScriptBasedDownloadAndInstallMixedResources(t *testing.T) {
 	defer os.RemoveAll(storageDir)
 
 	feature, mc, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
-		clientConnected: true, featureID: getDefaultFlagValue(t, flagFeatureID), storageLocation: storageDir, mode: modeLax,
+		clientConnected: true, featureID: NewDefaultConfig().FeatureID, storageLocation: storageDir, mode: modeLax,
 	})
 	if err != nil {
 		t.Fatalf("failed to initialize ScriptBasedSoftwareUpdatable: %v", err)
@@ -300,7 +300,7 @@ func testScriptBasedSoftwareUpdatableOperationsLocal(t *testing.T, installDirs [
 	defer os.RemoveAll(dir)
 
 	feature, mc, err := mockScriptBasedSoftwareUpdatable(t, &testConfig{
-		clientConnected: true, featureID: getDefaultFlagValue(t, flagFeatureID), storageLocation: dir,
+		clientConnected: true, featureID: NewDefaultConfig().FeatureID, storageLocation: dir,
 		installDirs: installDirs, mode: mode})
 	if err != nil {
 		t.Fatalf("failed to initialize ScriptBasedSoftwareUpdatable: %v", err)
