@@ -21,6 +21,7 @@ import (
 
 // NewTLSConfig initializes the TLS.
 func NewTLSConfig(rootCert, cert, key string) (*tls.Config, error) {
+	fmt.Println("NewTLS CONFIG!", rootCert)
 	caCert, err := os.ReadFile(rootCert)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load CA: %s", err)

@@ -53,6 +53,7 @@ func TestNewTLSConfig(t *testing.T) {
 		"empty_key_file_provided":       {CACert: caCertPath, Cert: certPath, Key: "testdata/empty.crt", ExpectedError: errors.New(invalidError)},
 		"cert_file_instead_key":         {CACert: caCertPath, Cert: certPath, Key: caCertPath, ExpectedError: fmt.Errorf("failed to load X509 key pair: tls: found a certificate rather than a key in the PEM for the private key")},
 		"invalid_key_file_provided":     {CACert: caCertPath, Cert: certPath, Key: invalidFile, ExpectedError: errors.New(invalidError)},
+		// "real_files": {CACert: "/home/antonia/tony/kanto/mosquitto_new_certs/ca.crt", Cert: "/home/antonia/tony/kanto/mosquitto_new_certs/client.crt", Key: "/home/antonia/tony/kanto/mosquitto_new_certs/client.key", ExpectedError: nil},
 	}
 
 	for testName, testCase := range tests {

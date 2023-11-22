@@ -23,7 +23,7 @@ func TestPathArgsIsSet(t *testing.T) {
 	f := flag.NewFlagSet("testing", flag.ContinueOnError)
 
 	var s []string
-	v := NewPathArgs(&s)
+	v := newPathArgs(&s)
 	f.Var(v, "S", "S")
 
 	args := []string{"-S=a b"}
@@ -47,7 +47,7 @@ func TestPathArgsInvalid(t *testing.T) {
 	f.SetOutput(io.Discard)
 
 	var s []string
-	v := NewPathArgs(&s)
+	v := newPathArgs(&s)
 	f.Var(v, "S", "S")
 
 	args := []string{"-S="}

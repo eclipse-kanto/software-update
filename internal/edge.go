@@ -17,7 +17,7 @@ import (
 	"net/url"
 
 	"github.com/eclipse-kanto/software-update/internal/logger"
-	"github.com/eclipse-kanto/software-update/internal/util/tls"
+	"github.com/eclipse-kanto/software-update/util/tls"
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
