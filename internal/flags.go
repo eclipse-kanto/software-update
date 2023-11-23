@@ -51,6 +51,9 @@ func InitFlags(flagSet *flag.FlagSet, cfg *BasicConfig) {
 	flagSet.StringVar(&cfg.Broker, "broker", cfg.Broker, "Local MQTT broker address")
 	flagSet.StringVar(&cfg.Username, "username", cfg.Username, "Username that is a part of the credentials")
 	flagSet.StringVar(&cfg.Password, "password", cfg.Password, "Password that is a part of the credentials")
+	flagSet.StringVar(&cfg.CACert, "caCert", cfg.CACert, "A PEM encoded CA certificates file for MQTT broker connection")
+	flagSet.StringVar(&cfg.Cert, "cert", cfg.Cert, "A PEM encoded certificate file to authenticate to the MQTT server/broker")
+	flagSet.StringVar(&cfg.Key, "key", cfg.Key, "A PEM encoded unencrypted private key file to authenticate to the MQTT server/broker")
 	flagSet.StringVar(&cfg.StorageLocation, "storageLocation", cfg.StorageLocation, "Location of the storage")
 	flagSet.StringVar(&cfg.FeatureID, "featureId", cfg.FeatureID, "Feature identifier of SoftwareUpdatable")
 	flagSet.StringVar(&cfg.ModuleType, "moduleType", cfg.ModuleType, "Module type of SoftwareUpdatable")
@@ -62,7 +65,7 @@ func InitFlags(flagSet *flag.FlagSet, cfg *BasicConfig) {
 	flagSet.StringVar(&cfg.Mode, "mode", cfg.Mode, modeDescription)
 
 	flagSet.Var(&cfg.InstallCommand, flagInstall, "Defines the absolute path to install script")
-	flagSet.Var(NewPathArgs(&cfg.InstallDirs), "installDirs", "Local file system directories, where to search for module artifacts")
+	flagSet.Var(newPathArgs(&cfg.InstallDirs), "installDirs", "Local file system directories, where to search for module artifacts")
 	flagSet.StringVar(&cfg.ConfigFile, flagConfigFile, cfg.ConfigFile, "Defines the configuration file")
 }
 

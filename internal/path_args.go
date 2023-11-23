@@ -36,8 +36,8 @@ func (a *pathArgs) Set(value string) error {
 	return nil
 }
 
-// NewPathArgs creates new flag variable for slice of strings definition.
-func NewPathArgs(setter *[]string) *pathArgs {
+// newPathArgs creates new flag variable for slice of strings definition.
+func newPathArgs(setter *[]string) *pathArgs {
 	return &pathArgs{
 		args: setter,
 	}
