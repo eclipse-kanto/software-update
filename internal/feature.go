@@ -39,6 +39,9 @@ const (
 	defaultBroker                = "tcp://localhost:1883"
 	defaultUsername              = ""
 	defaultPassword              = ""
+	defaultCACert                = ""
+	defaultCert                  = ""
+	defaultKey                   = ""
 	defaultStorageLocation       = "."
 	defaultFeatureID             = "SoftwareUpdatable"
 	defaultModuleType            = "software"
@@ -70,6 +73,9 @@ type ScriptBasedSoftwareUpdatableConfig struct {
 	Broker                string       `json:"broker,omitempty"`
 	Username              string       `json:"username,omitempty"`
 	Password              string       `json:"password,omitempty"`
+	CACert                string       `json:"caCert,omitempty"`
+	Cert                  string       `json:"cert,omitempty"`
+	Key                   string       `json:"key,omitempty"`
 	StorageLocation       string       `json:"storageLocation,omitempty"`
 	FeatureID             string       `json:"featureId,omitempty"`
 	ModuleType            string       `json:"moduleType,omitempty"`
@@ -117,6 +123,9 @@ func NewDefaultConfig() *BasicConfig {
 			Broker:                defaultBroker,
 			Username:              defaultUsername,
 			Password:              defaultPassword,
+			CACert:                defaultCACert,
+			Cert:                  defaultCert,
+			Key:                   defaultKey,
 			StorageLocation:       defaultStorageLocation,
 			FeatureID:             defaultFeatureID,
 			ModuleType:            defaultModuleType,
