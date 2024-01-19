@@ -9,4 +9,4 @@ jobs:
   generate-coverage-report:
     uses: eclipse-kanto/kanto/.github/workflows/coverage-template.yaml@main
     with: 
-      coverage-command: go test ./... -coverprofile=coverage.out -covermode count
+      coverage-command: go test ./... -coverprofile=coverage.out -covermode count -tags=unit
