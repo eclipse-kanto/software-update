@@ -126,7 +126,6 @@ func (f *ScriptBasedSoftwareUpdatable) installModule(
 	setLastOS(su, newOS(cid, module, hawkbit.StatusStarted))
 	storage.WriteLn(s, string(hawkbit.StatusStarted))
 Started:
-
 	// Downloading
 	logger.Debugf("[%s.%s] Downloading module", module.Name, module.Version)
 	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading))

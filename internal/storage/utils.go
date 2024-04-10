@@ -14,6 +14,8 @@ package storage
 
 import (
 	"bufio"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -318,4 +320,15 @@ func contains(s []string, str string) bool {
 		}
 	}
 	return false
+}
+
+func decodeString(format string, s string) ([]byte, error) {
+	if strings.ToLower(format) == "hex" {
+		return hex.DecodeString(s)
+	}
+	data, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return base64.RawStdEncoding.DecodeString(s)
+	}
+	return data, nil
 }

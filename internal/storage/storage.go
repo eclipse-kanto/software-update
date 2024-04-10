@@ -13,6 +13,8 @@
 package storage
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -21,6 +23,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/eclipse-kanto/software-update/hawkbit"
@@ -268,11 +271,49 @@ func (st *Storage) DownloadModule(toDir string, module *Module, progress Progres
 			continue
 		}
 		onlyLocalNoCopyArtifacts = false
-		if err = downloadArtifact(filepath.Join(toDir, sa.FileName), sa, callback, serverCert, retryCount,
-			retryInterval, st.done); err != nil {
+		var postProcess func(fileName string) error
+		if module.Metadata != nil && module.Metadata["AES256.key"] != "" {
+			var iv string
+			if iv = module.Metadata["AES256.iv"]; iv == "" {
+				return errors.New("AES256 key is provided, but initialization vector is missing. Only CBC encryption is supported")
+			}
+			postProcess = func(fileName string) error {
+				data, ppError := os.ReadFile(fileName)
+				if ppError != nil {
+					return ppError
+				}
+				format := module.Metadata["AES256.format"]
+				cipherTextDecoded, ppError := decodeString(format, strings.TrimSpace(string(data)))
+				if ppError != nil {
+					return fmt.Errorf("unable to decode artifact: %s", ppError)
+				}
+				encKeyDecoded, ppError := decodeString(format, module.Metadata["AES256.key"])
+				if ppError != nil {
+					return fmt.Errorf("unable to decode the provided key: %s", ppError)
+				}
+				ivDecoded, ppError := decodeString(format, iv)
+				if ppError != nil {
+					return fmt.Errorf("unable to decode the initialization vector (IV): %s", ppError)
+				}
+				block, ppError := aes.NewCipher([]byte(encKeyDecoded))
+				if ppError != nil {
+					return ppError
+				}
+				cipher.NewCBCDecrypter(block, []byte(ivDecoded)).CryptBlocks([]byte(cipherTextDecoded), []byte(cipherTextDecoded))
+				return os.WriteFile(fileName, cipherTextDecoded, 0755)
+
+			}
+		}
+		defer func() {
+			if r := recover(); r != nil { // the cipher.NewCBCDecrypter panics against all good practices...
+				err = fmt.Errorf("error during decryption %v", r)
+			}
+		}()
+		if err = downloadArtifact(filepath.Join(toDir, sa.FileName), sa, callback, serverCert, retryCount, retryInterval, postProcess, st.done); err != nil {
 			return err
 		}
 	}
+
 	if progress != nil && onlyLocalNoCopyArtifacts {
 		progress(100)
 	}
