@@ -271,7 +271,7 @@ func (st *Storage) DownloadModule(toDir string, module *Module, progress Progres
 			continue
 		}
 		onlyLocalNoCopyArtifacts = false
-		var postProcess func(fileName string) error
+		var postProcess postProcess
 		if module.Metadata != nil && module.Metadata["AES256.key"] != "" {
 			var iv string
 			if iv = module.Metadata["AES256.iv"]; iv == "" {

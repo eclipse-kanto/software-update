@@ -37,8 +37,11 @@ const prefix = "_temporary-"
 
 var secureCiphers = supportedCipherSuites()
 
+type postProcess func(fileName string) error
+
 // downloadArtifact tries to resume previous download operation or perform a new download.
-func downloadArtifact(to string, artifact *Artifact, progress progressBytes, serverCert string, retryCount int, retryInterval time.Duration, postProcess func(fileName string) error, done chan struct{}) error {
+func downloadArtifact(to string, artifact *Artifact, progress progressBytes,
+	serverCert string, retryCount int, retryInterval time.Duration, pp postProcess, done chan struct{}) error {
 	logger.Infof("download [%s] to file [%s]", artifact.Link, to)
 
 	// Check for available file.
@@ -93,8 +96,8 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, ser
 		}
 	}
 
-	if postProcess != nil {
-		if err := postProcess(tmp); err != nil {
+	if pp != nil {
+		if err := pp(tmp); err != nil {
 			return err
 		}
 	}
