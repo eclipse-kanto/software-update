@@ -18,14 +18,19 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -163,7 +168,7 @@ func TestLoadSoftwareUpdatables(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// Host dependency descriptions as module.zip
-	srv, art, _ := ddHost("module1.zip", t)
+	srv, art, _ := ddHost("module1.zip", t, nil)
 	defer srv.close()
 
 	// Create Storage object
@@ -224,7 +229,7 @@ func TestDownloadArchiveModule(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// Host dependency descriptions as module.zip
-	srv, art, dds := ddHost("module2.zip", t)
+	srv, art, dds := ddHost("module2.zip", t, nil)
 	defer srv.close()
 
 	// Create Storage object
@@ -287,6 +292,192 @@ func TestDownloadArchiveModule(t *testing.T) {
 	}
 }
 
+// TestDownloadAESEncryptedModuleBase64 tests DownloadModule with AES encrypted artifacts.
+func TestDownloadAESEncryptedModuleBase64(t *testing.T) {
+	testDownloadAESEncryptedModule(t, "base64")
+}
+
+// TestDownloadAESEncryptedModuleBase64Raw tests DownloadModule with AES encrypted artifacts.
+func TestDownloadAESEncryptedModuleBase64Raw(t *testing.T) {
+	testDownloadAESEncryptedModule(t, "base64raw")
+}
+
+// TestDownloadAESEncryptedModuleHex tests DownloadModule with AES encrypted artifacts.
+func TestDownloadAESEncryptedModuleHex(t *testing.T) {
+	testDownloadAESEncryptedModule(t, "hex")
+}
+
+func testDownloadAESEncryptedModule(t *testing.T, format string) {
+	dir := "_tmp-storage"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("fail create temporary directory: %v", err)
+	}
+
+	defer os.RemoveAll(dir)
+
+	key := "my32digitkey12345678901234567890"
+	iv := "my16digitIvKey12"
+
+	srv, art, _ := ddHost(fmt.Sprintf("module-%s.zip", format), t, func(data []byte) ([]byte, error) {
+		block, err := aes.NewCipher([]byte(key))
+		if err != nil {
+			return nil, err
+		}
+
+		var b []byte
+		length := len(data)
+		if length%16 != 0 {
+			extendBlock := 16 - (length % 16)
+			b = make([]byte, length+extendBlock)
+			copy(b[length:], bytes.Repeat([]byte{uint8(extendBlock)}, extendBlock))
+		} else {
+			b = make([]byte, length)
+		}
+		copy(b, data)
+
+		cipherText := make([]byte, len(b))
+		cipher.NewCBCEncrypter(block, []byte(iv)).CryptBlocks(cipherText, b)
+
+		return []byte(encode(format, string(cipherText), t)), nil
+	})
+	defer srv.close()
+
+	store, err := NewStorage(dir)
+	if err != nil {
+		t.Fatalf("fail to initialize local storage: %v", err)
+	}
+	defer store.Close()
+
+	path := filepath.Join(store.DownloadPath, "0", "0")
+
+	for _, modules := range []struct {
+		name string
+		m    *Module
+		ee   map[string]error
+	}{
+		{
+			"Successful Decryption",
+			&Module{
+				Name: "name1", Version: "1",
+				Artifacts: []*Artifact{art},
+				Metadata: map[string]string{
+					"AES256.key":    encode(format, key, t),
+					"AES256.iv":     encode(format, iv, t),
+					"AES256.format": format,
+				},
+			},
+			nil,
+		},
+		{
+			"IV Missing",
+			&Module{
+				Name: "name2", Version: "2",
+				Artifacts: []*Artifact{art},
+				Metadata: map[string]string{
+					"AES256.key":    encode(format, key, t),
+					"AES256.format": format,
+				},
+			},
+			map[string]error{
+				"base64": errors.New("AES256 key is provided, but initialization vector is missing. Only CBC encryption is supported"),
+				"hex":    errors.New("AES256 key is provided, but initialization vector is missing. Only CBC encryption is supported"),
+			},
+		},
+		{
+			"Malformed AES Key",
+			&Module{
+				Name: "name3", Version: "3",
+				Artifacts: []*Artifact{art},
+				Metadata: map[string]string{
+					"AES256.key":    "#$#$#$#$#$#$",
+					"AES256.iv":     encode(format, iv, t),
+					"AES256.format": format,
+				},
+			},
+			map[string]error{
+				"base64": errors.New("unable to decode the provided key: illegal base64 data at input byte 0"),
+				"hex":    errors.New("unable to decode the provided key: encoding/hex: invalid byte: U+0023 '#'"),
+			},
+		},
+		{
+			"Malformed AES IV",
+			&Module{
+				Name: "name4", Version: "4",
+				Artifacts: []*Artifact{art},
+				Metadata: map[string]string{
+					"AES256.key":    encode(format, key, t),
+					"AES256.iv":     "#$#$#$#$#$#$",
+					"AES256.format": format,
+				},
+			},
+			map[string]error{
+				"base64": errors.New("unable to decode the initialization vector (IV): illegal base64 data at input byte 0"),
+				"hex":    errors.New("unable to decode the initialization vector (IV): encoding/hex: invalid byte: U+0023 '#'"),
+			},
+		},
+		{
+			"Invalid AES Key",
+			&Module{
+				Name: "name5", Version: "5",
+				Artifacts: []*Artifact{art},
+				Metadata: map[string]string{
+					"AES256.key":    encode(format, ("key"), t),
+					"AES256.iv":     encode(format, iv, t),
+					"AES256.format": format,
+				},
+			},
+			map[string]error{
+				"base64": errors.New("crypto/aes: invalid key size 3"),
+				"hex":    errors.New("crypto/aes: invalid key size 3"),
+			},
+		},
+		{
+			"Invalid AES IV",
+			&Module{
+				Name: "name6", Version: "6",
+				Artifacts: []*Artifact{art},
+				Metadata: map[string]string{
+					"AES256.key":    encode(format, key, t),
+					"AES256.iv":     encode(format, ("iv"), t),
+					"AES256.format": format,
+				},
+			},
+			map[string]error{
+				"base64": errors.New("error during decryption cipher.NewCBCDecrypter: IV length must equal block size"),
+				"hex":    errors.New("error during decryption cipher.NewCBCDecrypter: IV length must equal block size"),
+			},
+		},
+	} {
+		t.Run(modules.name, func(t *testing.T) {
+			if err := store.DownloadModule(path, modules.m, nil, "", 0, 0, nil); err != nil {
+				f, _ := strings.CutSuffix(format, "raw")
+				if modules.ee != nil && err.Error() == modules.ee[f].Error() {
+					return
+				}
+				t.Fatalf("fail to download module [Hash: %s, File: %s]: %v", art.HashValue, hex.EncodeToString(srv.data), err)
+			}
+			existence(filepath.Join(path, art.FileName), true, "[initial download]", t)
+
+			if err := ExtractArchive(path); err != nil {
+				t.Fatalf("fail to extract module [%s]: %v", path, err)
+			}
+		})
+	}
+}
+
+func encode(format, data string, t *testing.T) string {
+	switch format {
+	case "base64":
+		return base64.StdEncoding.EncodeToString([]byte(data))
+	case "base64raw":
+		return base64.RawStdEncoding.EncodeToString([]byte(data))
+	case "hex":
+		return hex.EncodeToString([]byte(data))
+	}
+	t.Errorf("unsupported encoding format %s", format)
+	return ""
+}
+
 func existence(path string, exists bool, prefix string, t *testing.T) {
 	if _, err := os.Stat(path); os.IsNotExist(err) == exists {
 		t.Fatalf("%s fail to check file existence [path: %s, isNotExists: %v]", prefix, path, exists)
@@ -314,7 +505,7 @@ func hm(art *Artifact) []*hawkbit.SoftwareModuleAction {
 }
 
 // ddHost create and start a HTTP server on port: 43234
-func ddHost(name string, t *testing.T) (*sWeb, *Artifact, map[string]*hawkbit.DependencyDescription) {
+func ddHost(name string, t *testing.T, encrypt func(data []byte) ([]byte, error)) (*sWeb, *Artifact, map[string]*hawkbit.DependencyDescription) {
 	w := &sWeb{name: name, t: t}
 
 	// Create dependency descriptions
@@ -340,6 +531,13 @@ func ddHost(name string, t *testing.T) (*sWeb, *Artifact, map[string]*hawkbit.De
 	}
 	a.Close()
 	w.data = buf.Bytes()
+	if encrypt != nil {
+		var err error
+		w.data, err = encrypt(w.data)
+		if err != nil {
+			w.t.Fatalf("fail to encrypt data %v", err)
+		}
+	}
 
 	// Create new HTTP server.
 	w.srv = &http.Server{Addr: ":43234"}

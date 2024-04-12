@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -38,9 +37,11 @@ const prefix = "_temporary-"
 
 var secureCiphers = supportedCipherSuites()
 
+type postProcess func(fileName string) error
+
 // downloadArtifact tries to resume previous download operation or perform a new download.
-func downloadArtifact(to string, artifact *Artifact, progress progressBytes, serverCert string, retryCount int, retryInterval time.Duration,
-	done chan struct{}) error {
+func downloadArtifact(to string, artifact *Artifact, progress progressBytes,
+	serverCert string, retryCount int, retryInterval time.Duration, pp postProcess, done chan struct{}) error {
 	logger.Infof("download [%s] to file [%s]", artifact.Link, to)
 
 	// Check for available file.
@@ -95,6 +96,12 @@ func downloadArtifact(to string, artifact *Artifact, progress progressBytes, ser
 		}
 	}
 
+	if pp != nil {
+		if err := pp(tmp); err != nil {
+			return err
+		}
+	}
+
 	// Rename to the original file name.
 	return os.Rename(tmp, to)
 }
@@ -143,7 +150,7 @@ func resume(to string, offset int64, artifact *Artifact, progress progressBytes,
 
 func downloadFile(file *os.File, input io.ReadCloser, to string, offset int64, artifact *Artifact,
 	progress progressBytes, serverCert string, retryCount int, retryInterval time.Duration, done chan struct{}) (int64, error) {
-	w, err := copy(file, input, int64(artifact.Size)-offset, progress, done)
+	w, err := copyWithProgress(file, input, int64(artifact.Size)-offset, progress, done)
 	if err == nil {
 		err = validate(to, artifact.HashType, artifact.HashValue)
 		offset = 0 // in case of error, re-download the file
@@ -237,7 +244,7 @@ func requestDownload(link string, offset int64, serverCert string) (*http.Respon
 	var transport http.Transport
 	var caCertPool *x509.CertPool
 	if len(serverCert) > 0 {
-		caCert, err := ioutil.ReadFile(serverCert)
+		caCert, err := os.ReadFile(serverCert)
 		if err != nil {
 			return nil, fmt.Errorf("error reading CA certificate file - \"%s\"", serverCert)
 		}
@@ -275,7 +282,7 @@ func download(to string, in io.ReadCloser, artifact *Artifact, progress progress
 	return downloadFile(file, in, to, 0, artifact, progress, serverCert, retryCount, retryInterval, done)
 }
 
-func copy(dst io.Writer, src io.Reader, size int64, progress progressBytes, done chan struct{}) (w int64, err error) {
+func copyWithProgress(dst io.Writer, src io.Reader, size int64, progress progressBytes, done chan struct{}) (w int64, err error) {
 	buf := make([]byte, 32*1024)
 	for {
 		select {

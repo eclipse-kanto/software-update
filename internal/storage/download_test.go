@@ -119,22 +119,22 @@ func TestDownloadToFile(t *testing.T) {
 			HashType:  "SHA256",
 			HashValue: "4eefb9a7a40a8b314b586a00f307157043c0bbe4f59fa39cba88773680758bc3",
 		},
-	}, "", "", t)
+	}, "", t)
 }
 
 // TestDownloadToFileSecureSystemPool tests downloadToFile function, using secure protocol(s) and certificates from system pool.
 func TestDownloadToFileSecureSystemPool(t *testing.T) {
 	setSSLCerts(t)
 	defer unsetSSLCerts(t)
-	testDownloadToFileSecure("", "", t)
+	testDownloadToFileSecure("", t)
 }
 
 // TestDownloadToFileSecureCustomCertificate tests downloadToFile function, using secure protocol(s) and a custom certificate.
 func TestDownloadToFileSecureCustomCertificate(t *testing.T) {
-	testDownloadToFileSecure(validCert, validKey, t)
+	testDownloadToFileSecure(validCert, t)
 }
 
-func testDownloadToFileSecure(certFile, certKey string, t *testing.T) {
+func testDownloadToFileSecure(certFile string, t *testing.T) {
 	testDownloadToFile([]*Artifact{
 		{ // An Artifact with MD5 checksum.
 			FileName: "test.txt", Size: 65536, Link: "https://localhost:43234/test.txt",
@@ -151,10 +151,10 @@ func testDownloadToFileSecure(certFile, certKey string, t *testing.T) {
 			HashType:  "SHA256",
 			HashValue: "4eefb9a7a40a8b314b586a00f307157043c0bbe4f59fa39cba88773680758bc3",
 		},
-	}, certFile, certKey, t)
+	}, certFile, t)
 }
 
-func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T) {
+func testDownloadToFile(arts []*Artifact, certFile string, t *testing.T) {
 	for _, art := range arts {
 		t.Run(art.HashType, func(t *testing.T) {
 			// Prepare
@@ -174,7 +174,7 @@ func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T
 
 			// 1. Resume download of corrupted temporary file.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "wrong start")
-			if err := downloadArtifact(name, art, nil, certFile, 0, 0, make(chan struct{})); err == nil {
+			if err := downloadArtifact(name, art, nil, certFile, 0, 0, nil, make(chan struct{})); err == nil {
 				t.Fatal("download of corrupted temporary file must fail")
 			}
 
@@ -183,7 +183,7 @@ func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T
 			callback := func(bytes int64) {
 				close(done)
 			}
-			if err := downloadArtifact(name, art, callback, certFile, 0, 0, done); err != ErrCancel {
+			if err := downloadArtifact(name, art, callback, certFile, 0, 0, nil, done); err != ErrCancel {
 				t.Fatalf("failed to cancel download operation: %v", err)
 			}
 			if _, err := os.Stat(filepath.Join(dir, prefix+art.FileName)); os.IsNotExist(err) {
@@ -192,13 +192,13 @@ func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T
 
 			// 3. Resume previous download operation.
 			callback = func(bytes int64) { /* Do nothing. */ }
-			if err := downloadArtifact(name, art, callback, certFile, 0, 0, make(chan struct{})); err != nil {
+			if err := downloadArtifact(name, art, callback, certFile, 0, 0, nil, make(chan struct{})); err != nil {
 				t.Fatalf("failed to download artifact: %v", err)
 			}
 			check(name, art.Size, t)
 
 			// 4. Download available file.
-			if err := downloadArtifact(name, art, callback, certFile, 0, 0, make(chan struct{})); err != nil {
+			if err := downloadArtifact(name, art, callback, certFile, 0, 0, nil, make(chan struct{})); err != nil {
 				t.Fatalf("failed to download artifact: %v", err)
 			}
 			check(name, art.Size, t)
@@ -211,14 +211,14 @@ func testDownloadToFile(arts []*Artifact, certFile, certKey string, t *testing.T
 			// 5. Try to resume with file bigger than expected.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "1111111111111")
 			art.Size -= 10
-			if err := downloadArtifact(name, art, nil, certFile, 0, 0, make(chan struct{})); err == nil {
+			if err := downloadArtifact(name, art, nil, certFile, 0, 0, nil, make(chan struct{})); err == nil {
 				t.Fatal("validate resume with file bigger than expected")
 			}
 
 			// 6. Try to resume from missing link.
 			WriteLn(filepath.Join(dir, prefix+art.FileName), "1111111111111")
 			art.Link = "http://localhost:43234/test-missing.txt"
-			if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
+			if err := downloadArtifact(name, art, nil, "", 0, 0, nil, make(chan struct{})); err == nil {
 				t.Fatal("failed to validate with missing link")
 			}
 
@@ -256,7 +256,7 @@ func TestDownloadToFileLocalLink(t *testing.T) {
 			HashValue: "4eefb9a7a40a8b314b586a00f307157043c0bbe4f59fa39cba88773680758bc3",
 			Local:     true,
 		},
-	}, "", "", t)
+	}, "", t)
 }
 
 // TestDownloadToFileError tests downloadToFile function for some edge cases.
@@ -284,33 +284,33 @@ func TestDownloadToFileError(t *testing.T) {
 
 	// 1. Resume is not supported.
 	WriteLn(filepath.Join(dir, prefix+art.FileName), "1111")
-	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err != nil {
+	if err := downloadArtifact(name, art, nil, "", 0, 0, nil, make(chan struct{})); err != nil {
 		t.Fatalf("failed to download file artifact: %v", err)
 	}
 	check(name, art.Size, t)
 
 	// 2. Try with missing checksum.
 	art.HashValue = ""
-	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", 0, 0, nil, make(chan struct{})); err == nil {
 		t.Fatal("validated with missing checksum")
 	}
 
 	// 3. Try with missing link.
 	art.Link = "http://localhost:43234/test-missing.txt"
-	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", 0, 0, nil, make(chan struct{})); err == nil {
 		t.Fatal("failed to validate with missing link")
 	}
 
 	// 4. Try with wrong checksum type.
 	art.Link = "http://localhost:43234/test-simple.txt"
 	art.HashType = ""
-	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", 0, 0, nil, make(chan struct{})); err == nil {
 		t.Fatal("validate with wrong checksum type")
 	}
 
 	// 5. Try with wrong checksum format.
 	art.HashValue = ";;"
-	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", 0, 0, nil, make(chan struct{})); err == nil {
 		t.Fatal("validate with wrong checksum format")
 	}
 
@@ -318,7 +318,7 @@ func TestDownloadToFileError(t *testing.T) {
 	art.HashType = "MD5"
 	art.HashValue = "ab2ce340d36bbaafe17965a3a2c6ed5b"
 	art.Size -= 10
-	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", 0, 0, nil, make(chan struct{})); err == nil {
 		t.Fatal("validate with file bigger than expected")
 	}
 
@@ -346,11 +346,11 @@ func TestRobustDownloadRetryBadStatus(t *testing.T) {
 
 	name := filepath.Join(dir, art.FileName)
 
-	if err := downloadArtifact(name, art, nil, "", 1, 0, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", 1, 0, nil, make(chan struct{})); err == nil {
 		t.Fatal("error is expected when downloading artifact, due to bad response status")
 	}
 
-	if err := downloadArtifact(name, art, nil, "", 5, time.Second, make(chan struct{})); err != nil {
+	if err := downloadArtifact(name, art, nil, "", 5, time.Second, nil, make(chan struct{})); err != nil {
 		t.Fatal("expected to handle download error, by using retry download strategy")
 	}
 	check(name, art.Size, t)
@@ -359,7 +359,7 @@ func TestRobustDownloadRetryBadStatus(t *testing.T) {
 		t.Fatalf("failed to delete test file %s", name)
 	}
 	setIncorrectBehavior(2, false, false)
-	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", 0, 0, nil, make(chan struct{})); err == nil {
 		t.Fatal("error is expected when downloading artifact, due to bad response status")
 	}
 }
@@ -417,7 +417,7 @@ func testCopyError(withInsufficientRetryCount bool, withCorruptedFile bool, t *t
 	if withInsufficientRetryCount {
 		retryCount = 2
 	}
-	err := downloadArtifact(name, art, nil, "", retryCount, 2*time.Second, make(chan struct{}))
+	err := downloadArtifact(name, art, nil, "", retryCount, 2*time.Second, nil, make(chan struct{}))
 	if withInsufficientRetryCount {
 		if err == nil {
 			t.Fatal("error is expected when downloading artifact, due to copy error")
@@ -461,22 +461,22 @@ func TestDownloadToFileSecureError(t *testing.T) {
 
 	// 1. Server uses expired certificate
 	art.Link = "https://localhost:43234/test.txt"
-	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", 0, 0, nil, make(chan struct{})); err == nil {
 		t.Fatalf("download must fail(client uses no certificate, server uses expired): %v", err)
 	}
-	if err := downloadArtifact(name, art, nil, expiredCert, 0, 0, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, expiredCert, 0, 0, nil, make(chan struct{})); err == nil {
 		t.Fatalf("download must fail(client and server use expired certificate): %v", err)
 	}
 
 	// 2. Server uses untrusted certificate
 	art.Link = "https://localhost:43235/test.txt"
-	if err := downloadArtifact(name, art, nil, "", 0, 0, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, "", 0, 0, nil, make(chan struct{})); err == nil {
 		t.Fatalf("download must fail(client uses no certificate, server uses untrusted): %v", err)
 	}
 
 	// 3. Server uses valid certificate
 	art.Link = "https://localhost:43236/test.txt"
-	if err := downloadArtifact(name, art, nil, untrustedCert, 0, 0, make(chan struct{})); err == nil {
+	if err := downloadArtifact(name, art, nil, untrustedCert, 0, 0, nil, make(chan struct{})); err == nil {
 		t.Fatalf("download must fail(client uses untrusted certificate, server uses valid): %v", err)
 	}
 }
