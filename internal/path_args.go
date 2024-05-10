@@ -13,18 +13,32 @@
 package feature
 
 import (
+	"fmt"
 	"strings"
 )
 
 type pathArgs struct {
-	args []string
+	args *[]string
 }
 
 func (a *pathArgs) String() string {
-	return strings.Join(a.args, " ")
+	if a.args == nil {
+		return ""
+	}
+	return strings.Join(*a.args, " ")
 }
 
 func (a *pathArgs) Set(value string) error {
-	a.args = append(a.args, value)
+	if len(value) == 0 {
+		return fmt.Errorf("value cannot be empty")
+	}
+	*a.args = strings.Fields(value)
 	return nil
+}
+
+// newPathArgs creates new flag variable for slice of strings definition.
+func newPathArgs(setter *[]string) *pathArgs {
+	return &pathArgs{
+		args: setter,
+	}
 }

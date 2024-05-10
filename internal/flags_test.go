@@ -106,31 +106,34 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 	// 1. Test with log field
 	writeToConfigFile(t, "{\""+flagLogLevel+"\": \"TRACE\"}")
 	setFlags([]string{c(flagConfigFile, testConfigFileDirs), c(flagLogLevel, expectedResult)})
-	_, lc, err := InitFlags(testVersion)
+	cfg, err := LoadConfig(testVersion)
 	if err != nil {
 		t.Errorf("not expecting error when initializing flags with log level: %v", err)
 	}
 
-	if lc.LogLevel != expectedResult {
-		t.Errorf("unmatching result for flags high priority, found %v instead of %v", lc.LogLevel, expectedResult)
+	if cfg.LogLevel != expectedResult {
+		t.Errorf("unmatching result for flags high priority, found %v instead of %v", cfg.LogLevel, expectedResult)
 	}
 
 	expectedResult = "FeatureTestUpdatable"
 	// 2. Test with software updatable config field
 	writeToConfigFile(t, "{\""+flagFeatureID+"\": \"WrongFeatureID\"}")
 	setFlags([]string{c(flagConfigFile, testConfigFileDirs), c(flagFeatureID, expectedResult)})
-	sc, _, err := InitFlags(testVersion)
+	cfg, err = LoadConfig(testVersion)
 	if err != nil {
 		t.Errorf("not expecting error when initializing flags with featureId: %v", err)
 	}
 
-	if sc.FeatureID != expectedResult {
-		t.Errorf("unmatching result for flags high priority, found %v instead of %v", sc.FeatureID, expectedResult)
+	if cfg.FeatureID != expectedResult {
+		t.Errorf("unmatching result for flags high priority, found %v instead of %v", cfg.FeatureID, expectedResult)
 	}
 
 	// 3. Test with all flags are applied instead of default values if no configuration JSON is provided
 	expectedFlagBroker := "host:1234"
 	expectedArtifact := "TestArchive"
+	expectedCACert := "TestCaCert.crt"
+	expectedCert := "TestCert.cert"
+	expectedKey := "TestKey.key"
 	expectedFeatureID := "TestFeature"
 	expectedInstall := "TestInstall"
 	expectedServerCert := "TestCert"
@@ -152,9 +155,12 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 	setFlags([]string{
 		c(flagBroker, expectedFlagBroker),
 		c(flagArtifactType, expectedArtifact),
+		c(flagCACert, expectedCACert),
+		c(flagCert, expectedCert),
+		c(flagKey, expectedKey),
 		c(flagFeatureID, expectedFeatureID),
 		c(flagInstall, expectedInstall),
-		c(flagCert, expectedServerCert),
+		c(flagServerCert, expectedServerCert),
 		c(flagRetryCount, strconv.Itoa(expectedDownloadRetryCount)),
 		c(flagRetryInterval, expectedDownloadRetryInterval),
 		c(flagInstallDirs, expectedInstallDir),
@@ -171,28 +177,31 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 		c(flagVersion, expectedPrintVersion),
 	})
 
-	sc, lc, err = InitFlags(testVersion)
+	cfg, err = LoadConfig(testVersion)
 	if err != nil {
 		t.Errorf("not expecting error when initializing flags with featureId: %v", err)
 	}
 
-	assertConfigEqual(sc, &ScriptBasedSoftwareUpdatableConfig{
+	assertSoftwareUpdatable(t, cfg.ScriptBasedSoftwareUpdatableConfig, ScriptBasedSoftwareUpdatableConfig{
 		Broker:                expectedFlagBroker,
 		Username:              expectedUsername,
 		Password:              expectedPassword,
+		CACert:                expectedCACert,
+		Cert:                  expectedCert,
+		Key:                   expectedKey,
 		ServerCert:            expectedServerCert,
 		StorageLocation:       expectedStorageLocation,
 		InstallCommand:        command{cmd: expectedInstall},
 		DownloadRetryCount:    expectedDownloadRetryCount,
 		DownloadRetryInterval: getDurationTime(t, expectedDownloadRetryInterval),
-		InstallDirs:           pathArgs{args: []string{expectedInstallDir}},
+		InstallDirs:           []string{expectedInstallDir},
 		Mode:                  expectedMode,
 		FeatureID:             expectedFeatureID,
 		ModuleType:            expectedModuleType,
 		ArtifactType:          expectedArtifact,
 	})
 
-	assertConfigEqual(lc, &logger.LogConfig{
+	assertLogConfig(t, cfg.LogConfig, logger.LogConfig{
 		LogFile:       expectedLogFile,
 		LogLevel:      expectedLogLevel,
 		LogFileSize:   expectedLogFileSize,
@@ -201,20 +210,20 @@ func TestFlagsHasHigherPriority(t *testing.T) {
 	})
 }
 
-// TestInitFlagsWithPrintVersion tests that initialization with flags prints version and exit
-// when flag version is specified. Since the program exits, this test expects the InitFlags func to panic.
-func TestInitFlagsWithPrintVersion(t *testing.T) {
+// TestLoadConfigWithPrintVersion tests that initialization with flags prints version and exit
+// when flag version is specified. Since the program exits, this test expects the LoadConfig func to panic.
+func TestLoadConfigWithPrintVersion(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("expected to print the version and exit")
 		}
 	}()
 	setFlags([]string{c(flagVersion, "true")})
-	InitFlags(testVersion)
+	LoadConfig(testVersion)
 }
 
-// TestInitFlagWithInvalidConfigFile tests the behaviour when wrong JSON config file is supplied.
-func TestInitFlagWithInvalidConfigFile(t *testing.T) {
+// TestLoadConfigWithInvalidConfigFile tests the behavior when wrong JSON config file is supplied.
+func TestLoadConfigWithInvalidConfigFile(t *testing.T) {
 	// Prepare test default dir
 	dir := assertDirs(t, testDirFlags, true)
 	defer os.RemoveAll(dir)
@@ -222,32 +231,28 @@ func TestInitFlagWithInvalidConfigFile(t *testing.T) {
 	//1. Test with JSON which is not starting with leading "{" character
 	writeToConfigFile(t, "\"Broker\": \"tcp://host:1234\"}")
 	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
-	sc, lc, err := InitFlags(testVersion)
-	assertInitFlagsFails(t, sc, lc, err, "expecting init flags to fail if JSON format of the config file is not valid")
+	assertLoadConfigFails(t, "expecting init flags to fail if JSON format of the config file is not valid")
 
 	//2. Test with JSON using string instead of integer for config field value
 	writeToConfigFile(t, "{\"Broker\": \"tcp://host:1234\", \"LogFileSize\": \"20\"}")
 	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
-	sc, lc, err = InitFlags(testVersion)
-	assertInitFlagsFails(t, sc, lc, err, "expecting init flags to fail if provide int value to an string field")
+	assertLoadConfigFails(t, "expecting init flags to fail if provide int value to an string field")
 
 	//3. Test with JSON using integer instead of string for config field value
 	writeToConfigFile(t, "{\"Broker\": \"tcp://host:1234\", \"Username\": 200}")
 	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
-	sc, lc, err = InitFlags(testVersion)
-	assertInitFlagsFails(t, sc, lc, err, "expecting init flags to fail if provide string value to an int field")
+	assertLoadConfigFails(t, "expecting init flags to fail if provide string value to an int field")
 }
 
-// TestInitFlagsWithMissingConfigFile tests that the error is returned when missing config file is
+// TestLoadConfigWithMissingConfigFile tests that the error is returned when missing config file is
 // specified with flag.
-func TestInitFlagsWithMissingConfigFile(t *testing.T) {
+func TestLoadConfigWithMissingConfigFile(t *testing.T) {
 	setFlags([]string{c(flagConfigFile, "TestLocation")})
-	sc, lc, err := InitFlags(testVersion)
-	assertInitFlagsFails(t, sc, lc, err, "expecting error when initializing with missing config file flag")
+	assertLoadConfigFails(t, "expecting error when initializing with missing config file flag")
 }
 
-// TestInitFlagsConfigAllPropertiesProvided verifies that all of the properties from the configuration file are set
-func TestInitFlagsConfigAllPropertiesProvided(t *testing.T) {
+// TestLoadConfigConfigAllPropertiesProvided verifies that all of the properties from the configuration file are set
+func TestLoadConfigConfigAllPropertiesProvided(t *testing.T) {
 	// Prepare test default dir
 	dir := assertDirs(t, testDirFlags, true)
 	defer os.RemoveAll(dir)
@@ -258,27 +263,24 @@ func TestInitFlagsConfigAllPropertiesProvided(t *testing.T) {
 
 	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
 
-	expectedConfig := &ScriptBasedSoftwareUpdatableConfig{
-		Broker:                "tcp://host:1234",
-		FeatureID:             "SoftwareTestUpdatable",
-		ArtifactType:          "TestArchive",
-		ModuleType:            "TestSoftware",
-		StorageLocation:       dir,
-		Username:              "TestUser",
-		Password:              "TestPass",
-		DownloadRetryInterval: getDurationTime(t, "7s"),
-		Mode:                  "Scoped",
-	}
+	expectedConfig := NewDefaultConfig()
+	expectedConfig.Broker = "tcp://host:1234"
+	expectedConfig.FeatureID = "SoftwareTestUpdatable"
+	expectedConfig.ArtifactType = "TestArchive"
+	expectedConfig.ModuleType = "TestSoftware"
+	expectedConfig.StorageLocation = dir
+	expectedConfig.Username = "TestUser"
+	expectedConfig.Password = "TestPass"
+	expectedConfig.DownloadRetryInterval = getDurationTime(t, "7s")
+	expectedConfig.Mode = "Scoped"
 
-	expectedLogConfig := &logger.LogConfig{
-		LogFile:       "TestLogFile.txt",
-		LogLevel:      "TRACE",
-		LogFileSize:   10,
-		LogFileCount:  20,
-		LogFileMaxAge: 30,
-	}
+	expectedConfig.LogFile = "TestLogFile.txt"
+	expectedConfig.LogLevel = "TRACE"
+	expectedConfig.LogFileSize = 10
+	expectedConfig.LogFileCount = 20
+	expectedConfig.LogFileMaxAge = 30
 
-	compareConfigResult(t, expectedConfig, expectedLogConfig)
+	compareConfigResult(t, expectedConfig)
 }
 
 // TestWithEmptyConfigFile verifies if empty JSON configuration file is provided.
@@ -291,15 +293,12 @@ func TestWithEmptyConfigFile(t *testing.T) {
 	writeToConfigFile(t, "")
 	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
 
-	_, _, err := InitFlags(testVersion)
-	if err == nil {
-		t.Errorf("expected to fail when empty config file is supplied")
-	}
+	assertLoadConfigFails(t, "expected to fail when empty config file is supplied")
 }
 
-// TestInitFlagsWithConfigMixedContent verifies if some of the configuration properties are provided
+// TestLoadConfigWithConfigMixedContent verifies if some of the configuration properties are provided
 // and those who are not, are used from default values
-func TestInitFlagsWithConfigMixedContent(t *testing.T) {
+func TestLoadConfigWithConfigMixedContent(t *testing.T) {
 	// Prepare test default dir
 	dir := assertDirs(t, testDirFlags, true)
 	defer os.RemoveAll(dir)
@@ -308,79 +307,86 @@ func TestInitFlagsWithConfigMixedContent(t *testing.T) {
 	writeToConfigFile(t, content)
 	setFlags([]string{c(flagConfigFile, testConfigFileDirs)})
 
-	expectedConfig := &ScriptBasedSoftwareUpdatableConfig{
-		Broker:                "tcp://host:12345",
-		FeatureID:             getDefaultFlagValue(t, flagFeatureID),
-		ArtifactType:          getDefaultFlagValue(t, flagArtifactType),
-		ModuleType:            getDefaultFlagValue(t, flagModuleType),
-		StorageLocation:       getDefaultFlagValue(t, flagStorageLocation),
-		Username:              "test",
-		Password:              getDefaultFlagValue(t, flagPassword),
-		DownloadRetryInterval: getDurationTime(t, getDefaultFlagValue(t, flagRetryInterval)),
-		Mode:                  getDefaultFlagValue(t, flagMode),
-	}
+	expectedConfig := NewDefaultConfig()
+	expectedConfig.Broker = "tcp://host:12345"
+	expectedConfig.Username = "test"
 
-	expectedLogConfig := &logger.LogConfig{
-		LogFile:       "test_log.txt",
-		LogLevel:      "TRACE",
-		LogFileSize:   getDefaultFlagValueInt(t, flagLogFileSize),
-		LogFileCount:  getDefaultFlagValueInt(t, flagLogFileCount),
-		LogFileMaxAge: getDefaultFlagValueInt(t, flagLogFileMaxAge),
-	}
+	expectedConfig.LogFile = "test_log.txt"
+	expectedConfig.LogLevel = "TRACE"
 
-	compareConfigResult(t, expectedConfig, expectedLogConfig)
+	compareConfigResult(t, expectedConfig)
 }
 
 func TestInvalidAccessModeFlag(t *testing.T) {
 	setFlags([]string{c(flagMode, "test"), c(flagFeatureID, "id")})
-	sc, _, err := InitFlags(testVersion)
+	cfg, err := LoadConfig(testVersion)
 	if err != nil {
 		t.Errorf("not expecting error when initializing flags with invalid access mode: %v", err)
 	}
-	if err = sc.Validate(); err == nil {
+	if err = cfg.Validate(); err == nil {
 		t.Fatal("expecting error when validating configuration with invalid access mode flag")
 	}
 }
 
 // compareConfigResult function verifies the content of the expected and actual configuration struct
-func compareConfigResult(t *testing.T, expectedConfig *ScriptBasedSoftwareUpdatableConfig, expectedLogConfig *logger.LogConfig) {
-	suConfig, logConfig, err := InitFlags(testVersion)
+func compareConfigResult(t *testing.T, expectedConfig *BasicConfig) {
+	cfg, err := LoadConfig(testVersion)
 
-	if suConfig == nil || logConfig == nil || err != nil {
+	if err != nil {
 		t.Error("failed to init flags with valid configuration file: ", err)
 	}
 
-	if !assertConfigEqual(expectedConfig, suConfig) || !assertConfigEqual(expectedLogConfig, logConfig) {
-		t.Errorf("configurations does not match, suConfig: %v != %v or logConfig: %v != %v ",
-			expectedConfig, suConfig, expectedLogConfig, logConfig)
+	assertSoftwareUpdatable(t, cfg.ScriptBasedSoftwareUpdatableConfig, expectedConfig.ScriptBasedSoftwareUpdatableConfig)
+	assertLogConfig(t, cfg.LogConfig, expectedConfig.LogConfig)
+}
+
+func assertString(t *testing.T, actual, expected string) {
+	if expected != actual {
+		t.Errorf("Expected string value %s, but received value %s", expected, actual)
 	}
 }
 
-func assertConfigEqual(actual interface{}, expected interface{}) bool {
-	valueOfExp := reflect.ValueOf(expected).Elem()
-	typeOfExp := valueOfExp.Type()
-	valueOfAct := reflect.ValueOf(actual).Elem()
-	for i := 0; i < typeOfExp.NumField(); i++ {
-		fieldType := typeOfExp.Field(i)
-		expectedValue := valueOfExp.FieldByName(fieldType.Name).Interface()
-		actualValue := valueOfAct.FieldByName(fieldType.Name).Interface()
-		switch expectedValue.(type) {
-		case int, string:
-			if expectedValue != actualValue {
-				return false
-			}
-		default:
-			if !reflect.DeepEqual(expectedValue, actualValue) {
-				return false
-			}
-		}
+func assertInt(t *testing.T, actual, expected int) {
+	if expected != actual {
+		t.Errorf("Expected int value %d, but received value %d", expected, actual)
 	}
-	return true
 }
 
-func assertInitFlagsFails(t *testing.T, suConfig *ScriptBasedSoftwareUpdatableConfig,
-	logConfig *logger.LogConfig, err error, msg string) {
-	if suConfig != nil || logConfig != nil || err == nil {
+func assertDeep(t *testing.T, actual, expected interface{}) {
+	if !reflect.DeepEqual(expected, actual) {
+		t.Errorf("Expected  %s, but received %s", expected, actual)
+	}
+}
+
+func assertSoftwareUpdatable(t *testing.T, actual, expected ScriptBasedSoftwareUpdatableConfig) {
+	assertString(t, actual.Broker, expected.Broker)
+	assertString(t, actual.Username, expected.Username)
+	assertString(t, actual.Password, expected.Password)
+	assertString(t, actual.CACert, expected.CACert)
+	assertString(t, actual.Cert, expected.Cert)
+	assertString(t, actual.Key, expected.Key)
+	assertString(t, actual.ServerCert, expected.ServerCert)
+	assertString(t, actual.StorageLocation, expected.StorageLocation)
+	assertInt(t, actual.DownloadRetryCount, expected.DownloadRetryCount)
+	assertDeep(t, actual.DownloadRetryInterval, expected.DownloadRetryInterval)
+	assertDeep(t, actual.InstallDirs, expected.InstallDirs)
+	assertString(t, actual.Mode, expected.Mode)
+	assertString(t, actual.FeatureID, expected.FeatureID)
+	assertString(t, actual.ModuleType, expected.ModuleType)
+	assertString(t, actual.ArtifactType, expected.ArtifactType)
+}
+
+func assertLogConfig(t *testing.T, actual, expected logger.LogConfig) {
+	assertString(t, actual.LogFile, expected.LogFile)
+	assertString(t, actual.LogLevel, expected.LogLevel)
+	assertInt(t, actual.LogFileSize, expected.LogFileSize)
+	assertInt(t, actual.LogFileCount, expected.LogFileCount)
+	assertInt(t, actual.LogFileMaxAge, expected.LogFileMaxAge)
+}
+
+func assertLoadConfigFails(t *testing.T, msg string) {
+	_, err := LoadConfig(testVersion)
+	if err == nil {
 		t.Error(msg)
 	}
 }
@@ -388,33 +394,33 @@ func assertInitFlagsFails(t *testing.T, suConfig *ScriptBasedSoftwareUpdatableCo
 // assertInstallCommand verifies the result when initializing flags with install command,
 // which is specified with config file or flag
 func assertInstallCommand(t *testing.T, expectedInstallCMD string, expectedInstallArgs string) {
-	sc, _, err := InitFlags(testVersion)
+	cfg, err := LoadConfig(testVersion)
 	if err != nil {
 		t.Errorf("not expecting error when initializing with install config: %v", err)
 	}
-	if len(sc.InstallCommand.args) != 1 {
+	if len(cfg.InstallCommand.args) != 1 {
 		t.Error("expecting install command to be set")
 	}
-	if sc.InstallCommand.args[0] != expectedInstallArgs {
-		t.Errorf("unmatching install command args, expected %v, actual %v", expectedInstallArgs, sc.InstallCommand.args)
+	if cfg.InstallCommand.args[0] != expectedInstallArgs {
+		t.Errorf("unmatching install command args, expected %v, actual %v", expectedInstallArgs, cfg.InstallCommand.args)
 	}
-	if sc.InstallCommand.cmd != expectedInstallCMD {
-		t.Errorf("unmatching install command path, expected %v, actual %v", expectedInstallCMD, sc.InstallCommand.cmd)
+	if cfg.InstallCommand.cmd != expectedInstallCMD {
+		t.Errorf("unmatching install command path, expected %v, actual %v", expectedInstallCMD, cfg.InstallCommand.cmd)
 	}
 }
 
 // assertInstallDirs verifies the result when initializing flags with install directories,
 // which are specified with config file or flag
 func assertInstallDirs(t *testing.T, expectedInstallDir string) {
-	sc, _, err := InitFlags(testVersion)
+	cfg, err := LoadConfig(testVersion)
 	if err != nil {
 		t.Errorf("not expecting error when initializing with install config: %v", err)
 	}
-	if len(sc.InstallDirs.args) != 1 {
+	if len(cfg.InstallDirs) != 1 {
 		t.Error("expecting install directories to be set")
 	}
-	if sc.InstallDirs.args[0] != expectedInstallDir {
-		t.Errorf("unmatching install directories args, expected %v, actual %v", expectedInstallDir, sc.InstallCommand.args)
+	if cfg.InstallDirs[0] != expectedInstallDir {
+		t.Errorf("unmatching install directories args, expected %v, actual %v", expectedInstallDir, cfg.InstallCommand)
 	}
 }
 
@@ -441,8 +447,6 @@ func setFlags(args []string) {
 func resetArgs() {
 	// save the state of args before the test starts
 	oldArgs := os.Args
-	suConfig = &ScriptBasedSoftwareUpdatableConfig{}
-	logConfig = &logger.LogConfig{}
 
 	defer func() {
 		// return the state of args for the next tests
@@ -450,35 +454,6 @@ func resetArgs() {
 		// reset the flags before each test to avoid flag redefined panic
 		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	}()
-}
-
-func getDefaultFlagValue(t *testing.T, flagName string) string {
-	flagName = toFieldName(flagName)
-	valueOf := reflect.ValueOf(cfg{})
-	typeOf := valueOf.Type()
-	fieldName := toFieldName(flagName)
-	fieldType, ok := typeOf.FieldByName(fieldName)
-	if ok {
-		return fieldType.Tag.Get("def")
-	}
-	t.Fatalf("unable to get field %s", fieldName)
-	return "" // unreachable
-}
-
-func getDefaultFlagValueInt(t *testing.T, flagName string) int {
-	valueOf := reflect.ValueOf(cfg{})
-	typeOf := valueOf.Type()
-	fieldName := toFieldName(flagName)
-	fieldType, ok := typeOf.FieldByName(fieldName)
-	if ok {
-		result, err := strconv.Atoi(fieldType.Tag.Get("def"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return result
-	}
-	t.Fatalf("unable to get field %s", fieldName)
-	return 0 // unreachable
 }
 
 func getDurationTime(t *testing.T, defaultValue string) (result durationTime) {

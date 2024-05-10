@@ -41,6 +41,9 @@ const (
 	flagBroker          = "broker"
 	flagUsername        = "username"
 	flagPassword        = "password"
+	flagCACert          = "caCert"
+	flagCert            = "cert"
+	flagKey             = "key"
 	flagStorageLocation = "storageLocation"
 	flagFeatureID       = "featureId"
 	flagModuleType      = "moduleType"
@@ -51,9 +54,11 @@ const (
 	flagLogFileSize     = "logFileSize"
 	flagLogFileCount    = "logFileCount"
 	flagLogFileMaxAge   = "logFileMaxAge"
-	flagCert            = "serverCert"
+	flagServerCert      = "serverCert"
 	flagRetryCount      = "downloadRetryCount"
 	flagRetryInterval   = "downloadRetryInterval"
+	flagInstallDirs     = "installDirs"
+	flagVersion         = "version"
 )
 
 // testConfig is used to provide mock data
@@ -92,16 +97,13 @@ func assertDirs(t *testing.T, name string, create bool) string {
 
 func connectFeature(t *testing.T, mc *mockedClient, feature *ScriptBasedSoftwareUpdatable, featureID string) error {
 	t.Helper()
-	supConfig := &ScriptBasedSoftwareUpdatableConfig{
-		Broker:     getDefaultFlagValue(t, flagBroker),
-		FeatureID:  featureID,
-		ModuleType: getDefaultFlagValue(t, flagModuleType),
-	}
+	cfg := NewDefaultConfig()
+	cfg.ScriptBasedSoftwareUpdatableConfig.FeatureID = featureID
 	edgeCfg := &edgeConfiguration{
 		DeviceID: model.NewNamespacedID(testTopicNamespace, testTopicEntryID).String(),
 		TenantID: testTenantID,
 	}
-	return feature.Connect(mc, supConfig, edgeCfg)
+	return feature.Connect(mc, &cfg.ScriptBasedSoftwareUpdatableConfig, edgeCfg)
 }
 
 // mockScriptBasedSoftwareUpdatable create new ScriptBasedSoftwareUpdatable with mocked MQTT clients.
