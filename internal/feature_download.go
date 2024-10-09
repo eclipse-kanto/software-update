@@ -34,6 +34,7 @@ func (f *ScriptBasedSoftwareUpdatable) downloadHandler(
 
 // downloadModule is called by download handler and after restart with remaining updatables.
 // returns true if canceled!
+// testing
 func (f *ScriptBasedSoftwareUpdatable) downloadModules(
 	toDir string, updatable *storage.Updatable, su *hawkbit.SoftwareUpdatable) bool {
 	// Process download operation.
