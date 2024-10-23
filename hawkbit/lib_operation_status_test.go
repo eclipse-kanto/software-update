@@ -55,7 +55,7 @@ func TestOperationStatusUpdate(t *testing.T) {
 	}
 
 	// 4. Test WithProgress value.
-	if ops.WithProgress(progress).Progress != progress {
+	if ops.WithProgress(&progress).Progress != progress {
 		t.Errorf("progress mishmash: %v != %v", ops.Progress, progress)
 	}
 

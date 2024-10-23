@@ -24,7 +24,7 @@ type OperationStatus struct {
 	// Software is required for a remove or cancelRemove operation, absent in case of install/download/cancel.
 	Software []*DependencyDescription `json:"software,omitempty"`
 	// Progress represents the progress indicator in percentage.
-	Progress int `json:"progress,omitempty"`
+	Progress *int `json:"progress,omitempty"`
 	// Message from the device to give more context to the transmitted status.
 	Message string `json:"message,omitempty"`
 	// StatusCode represents a custom status code transmitted by the device.
@@ -67,7 +67,7 @@ func (os *OperationStatus) WithSoftware(software ...*DependencyDescription) *Ope
 }
 
 // WithProgress sets the progress of the operation status.
-func (os *OperationStatus) WithProgress(progress int) *OperationStatus {
+func (os *OperationStatus) WithProgress(progress *int) *OperationStatus {
 	os.Progress = progress
 	return os
 }

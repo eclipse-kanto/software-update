@@ -93,9 +93,10 @@ if err := su.SetContextDependencies(dependency); err != nil {
 ```go
 func installHandler(update *hawkbit.SoftwareUpdateAction, su *hawkbit.SoftwareUpdatable) {
     // Install provided software modules.
+	startProgress := 0
 	for _, module := range update.SoftwareModules {
 		status := hawkbit.NewOperationStatusUpdate(update.CorrelationID, hawkbit.StatusStarted, module.SoftwareModule).
-			WithProgress(0).WithMessage("install operation just started")
+			WithProgress(&startProgress).WithMessage("install operation just started")
 		if err := su.SetLastOperation(status); err != nil {
 			fmt.Println(fmt.Errorf("could not update the last operation: %v", err))
 		}
