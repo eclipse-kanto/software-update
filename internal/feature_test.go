@@ -181,10 +181,10 @@ func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, 
 		feature.downloadHandler(sua, feature.su)
 	}
 	// only 1 artifact here
-	preDisconnectEventCount := 2  // STARTED, DOWNLOADING
-	postDisconnectEventCount := 3 // DOWNLOADING(100)/INSTALLING(100), DOWNLOADED/INSTALLED, FINISHED_SUCCESS
+	preDisconnectEventCount := 2  // STARTED, DOWNLOADING(0)
+	postDisconnectEventCount := 3 // DOWNLOADING(100)/INSTALLING(100), DOWNLOADED(100)/INSTALLED(100), FINISHED_SUCCESS
 	if install {
-		preDisconnectEventCount = 5 // STARTED, DOWNLOADING, DOWNLOADING(100), DOWNLOADED, INSTALLING
+		preDisconnectEventCount = 5 // STARTED, DOWNLOADING(0), DOWNLOADING(100), DOWNLOADED(100), INSTALLING(0)
 	}
 	statuses := pullStatusChanges(mc, preDisconnectEventCount) // should go between DOWNLOADING/INSTALLING and next state
 
@@ -334,7 +334,7 @@ func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient
 	// Try to execute a simple download operation.
 	feature.downloadHandler(sua, feature.su)
 
-	statuses := pullStatusChanges(mc, 5+extraDownloadingEventsCount) // STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED, FINISHED_SUCCESS
+	statuses := pullStatusChanges(mc, 5+extraDownloadingEventsCount) // STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED(100), FINISHED_SUCCESS
 	if expectedSuccess {
 		checkDownloadStatusEvents(extraDownloadingEventsCount, statuses, t)
 		if copyArtifacts == "" {
