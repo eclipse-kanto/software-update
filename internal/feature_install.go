@@ -73,7 +73,7 @@ func (f *ScriptBasedSoftwareUpdatable) installModule(
 	var opError error
 	opErrorMsg := errRuntime
 	startProgress := 0
-	endProgress := 100
+	completeProgress := 100
 	execInstallScriptDir := dir
 
 	// Process final operation status in defer to also catch potential panic calls.
@@ -144,7 +144,7 @@ Downloading:
 
 	// Downloaded
 	logger.Debugf("[%s.%s] Module download finished", module.Name, module.Version)
-	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloaded).WithProgress(&endProgress))
+	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloaded).WithProgress(&completeProgress))
 	storage.WriteLn(s, string(hawkbit.StatusDownloaded))
 Downloaded:
 
@@ -224,7 +224,7 @@ Installing:
 
 	// Installed
 	logger.Debugf("[%s.%s] Module installed", module.Name, module.Version)
-	setLastOS(su, newFileOS(execInstallScriptDir, cid, module, hawkbit.StatusInstalled).WithProgress(&endProgress))
+	setLastOS(su, newFileOS(execInstallScriptDir, cid, module, hawkbit.StatusInstalled).WithProgress(&completeProgress))
 
 	// Update installed dependencies
 	deps, err := f.store.LoadInstalledDeps()

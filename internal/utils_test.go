@@ -73,10 +73,10 @@ type testConfig struct {
 var (
 	testVersion = "TestVersion"
 
-	partialDownload = func(progress float64) bool {
-		return progress > 0 && progress < 100
+	partialProgress = func(progress float64) bool {
+		return progress >= 0 && progress < 100
 	}
-	completeDownload = func(progress float64) bool {
+	completeProgress = func(progress float64) bool {
 		return progress == 100
 	}
 )

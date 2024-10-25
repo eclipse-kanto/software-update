@@ -77,7 +77,7 @@ func (f *ScriptBasedSoftwareUpdatable) downloadModule(
 	var opError error
 	opErrorMsg := errRuntime
 	startProgress := 0
-	endProgress := 100
+	completeProgress := 100
 
 	// Process final operation status in defer to also catch potential panic calls.
 	defer func() {
@@ -136,7 +136,7 @@ Downloading:
 
 	// Downloaded
 	logger.Debugf("[%s.%s] Module download finished", module.Name, module.Version)
-	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloaded).WithProgress(&endProgress))
+	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloaded).WithProgress(&completeProgress))
 	storage.WriteLn(s, string(hawkbit.StatusDownloaded))
 	return false
 }

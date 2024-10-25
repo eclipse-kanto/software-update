@@ -191,7 +191,7 @@ func newFileOS(dir string, cid string, module *storage.Module, status hawkbit.St
 			if c != "" {
 				ops.WithStatusCode(c)
 			}
-			if p >= 0 && p <= 100 {
+			if p > 0 && p <= 100 {
 				ops.WithProgress(&p)
 			}
 			if m != "" {
