@@ -45,7 +45,7 @@ func (o *monitor) update(name string) {
 		o.oldMessage = m
 		o.oldStatusCode = c
 		ops := hawkbit.NewOperationStatusUpdate(o.cid, o.status, o.module).
-			WithProgress(p).WithMessage(m).WithStatusCode(c)
+			WithProgress(&p).WithMessage(m).WithStatusCode(c)
 		if err := o.su.SetLastOperation(ops); err != nil {
 			logger.Errorf("fail to send last operation status: %v", err)
 		}
