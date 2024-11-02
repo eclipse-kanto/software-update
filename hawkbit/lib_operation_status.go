@@ -12,6 +12,17 @@
 
 package hawkbit
 
+// OperationStatus structure keys
+const (
+	correlationIdParam  = "correlationId"
+	statusParam         = "status"
+	softwareModuleParam = "softwareModule"
+	SoftwareParam       = "Software"
+	progressParam       = "progress"
+	messageParam        = "message"
+	statusCodeParam     = "statusCode"
+)
+
 // OperationStatus represents the status of an operation (install/remove) called on a device.
 type OperationStatus struct {
 	// CorrelationID is used for correlating the status-update with the operation called before.

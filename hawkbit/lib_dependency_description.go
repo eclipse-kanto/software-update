@@ -12,6 +12,14 @@
 
 package hawkbit
 
+// DependencyDescription structure keys
+const (
+	softwareGroupParam   = "group"
+	softwareNameParam    = "name"
+	softwareVersionParam = "version"
+	softwareTypeParam    = "type"
+)
+
 // DependencyDescription describes an installed software or other dependencies for a device.
 type DependencyDescription struct {
 	// Group represents an identifier which groups the dependency into a certain category.
