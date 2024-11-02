@@ -12,7 +12,7 @@
 
 package hawkbit
 
-// DependencyDescription structure keys
+// Software DependencyDescription structure keys
 const (
 	softwareGroupParam   = "group"
 	softwareNameParam    = "name"
