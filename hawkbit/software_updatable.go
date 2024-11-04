@@ -169,7 +169,7 @@ func MapLastOperation(LastOperationPtr *OperationStatus) map[string]interface{} 
 	}
 
 	if LastOperationPtr.StatusCode != "" {
-		lastOperationMap[progressParam] = LastOperationPtr.StatusCode
+		lastOperationMap[statusCodeParam] = LastOperationPtr.StatusCode
 	}
 
 	return lastOperationMap
