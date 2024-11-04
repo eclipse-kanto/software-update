@@ -14,7 +14,7 @@ package hawkbit
 
 // OperationStatus structure keys
 const (
-	correlationIdParam  = "correlationId"
+	correlationIDParam  = "correlationID"
 	statusParam         = "status"
 	softwareModuleParam = "softwareModule"
 	SoftwareParam       = "Software"

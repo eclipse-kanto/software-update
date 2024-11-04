@@ -136,7 +136,7 @@ func (su *SoftwareUpdatable) SetContextDependencies(deps ...*DependencyDescripti
 // This enables the logging of last operation status with keys and values
 func MapLastOperation(LastOperationPtr *OperationStatus) map[string]interface{} {
 	lastOperationMap := make(map[string]interface{})
-	lastOperationMap[correlationIdParam] = LastOperationPtr.CorrelationID
+	lastOperationMap[correlationIDParam] = LastOperationPtr.CorrelationID
 	lastOperationMap[statusParam] = LastOperationPtr.Status
 
 	if LastOperationPtr.SoftwareModule != nil {
