@@ -72,7 +72,8 @@ func (f *ScriptBasedSoftwareUpdatable) installModule(
 	s := filepath.Join(dir, storage.InternalStatusName)
 	var opError error
 	opErrorMsg := errRuntime
-
+	startProgress := 0
+	completeProgress := 100
 	execInstallScriptDir := dir
 
 	// Process final operation status in defer to also catch potential panic calls.
@@ -128,11 +129,11 @@ func (f *ScriptBasedSoftwareUpdatable) installModule(
 Started:
 	// Downloading
 	logger.Debugf("[%s.%s] Downloading module", module.Name, module.Version)
-	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading))
+	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading).WithProgress(&startProgress))
 	storage.WriteLn(s, string(hawkbit.StatusDownloading))
 Downloading:
 	if opError = f.store.DownloadModule(dir, module, func(progress int) {
-		setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading).WithProgress(progress))
+		setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading).WithProgress(&progress))
 	}, f.serverCert, f.downloadRetryCount, f.downloadRetryInterval, func() error {
 		return f.validateLocalArtifacts(module)
 	}); opError != nil {
@@ -143,13 +144,13 @@ Downloading:
 
 	// Downloaded
 	logger.Debugf("[%s.%s] Module download finished", module.Name, module.Version)
-	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloaded).WithProgress(100))
+	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloaded).WithProgress(&completeProgress))
 	storage.WriteLn(s, string(hawkbit.StatusDownloaded))
 Downloaded:
 
 	// Installing
 	logger.Debugf("[%s.%s] Installing module", module.Name, module.Version)
-	setLastOS(su, newOS(cid, module, hawkbit.StatusInstalling).WithProgress(0))
+	setLastOS(su, newOS(cid, module, hawkbit.StatusInstalling).WithProgress(&startProgress))
 	storage.WriteLn(s, string(hawkbit.StatusInstalling))
 Installing:
 
@@ -223,7 +224,7 @@ Installing:
 
 	// Installed
 	logger.Debugf("[%s.%s] Module installed", module.Name, module.Version)
-	setLastOS(su, newFileOS(execInstallScriptDir, cid, module, hawkbit.StatusInstalled))
+	setLastOS(su, newFileOS(execInstallScriptDir, cid, module, hawkbit.StatusInstalled).WithProgress(&completeProgress))
 
 	// Update installed dependencies
 	deps, err := f.store.LoadInstalledDeps()

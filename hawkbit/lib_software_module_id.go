@@ -12,6 +12,12 @@
 
 package hawkbit
 
+// SoftwareModuleID structure keys
+const (
+	softwareModuleNameParam    = "name"
+	softwareModuleVersionParam = "version"
+)
+
 // SoftwareModuleID represents an unique identifier for software modules.
 type SoftwareModuleID struct {
 	// Name for the software module.

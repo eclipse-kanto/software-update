@@ -181,10 +181,10 @@ func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, 
 		feature.downloadHandler(sua, feature.su)
 	}
 	// only 1 artifact here
-	preDisconnectEventCount := 2  // STARTED, DOWNLOADING
-	postDisconnectEventCount := 3 // DOWNLOADING(100)/INSTALLING(100), DOWNLOADED/INSTALLED, FINISHED_SUCCESS
+	preDisconnectEventCount := 2  // STARTED, DOWNLOADING(0)
+	postDisconnectEventCount := 3 // DOWNLOADING(100)/INSTALLING(100), DOWNLOADED(100)/INSTALLED(100), FINISHED_SUCCESS
 	if install {
-		preDisconnectEventCount = 5 // STARTED, DOWNLOADING, DOWNLOADING(100), DOWNLOADED, INSTALLING
+		preDisconnectEventCount = 5 // STARTED, DOWNLOADING(0), DOWNLOADING(100), DOWNLOADED(100), INSTALLING(0)
 	}
 	statuses := pullStatusChanges(mc, preDisconnectEventCount) // should go between DOWNLOADING/INSTALLING and next state
 
@@ -334,7 +334,7 @@ func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient
 	// Try to execute a simple download operation.
 	feature.downloadHandler(sua, feature.su)
 
-	statuses := pullStatusChanges(mc, 5+extraDownloadingEventsCount) // STARTED, DOWNLOADING, DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED, FINISHED_SUCCESS
+	statuses := pullStatusChanges(mc, 5+extraDownloadingEventsCount) // STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED(100), FINISHED_SUCCESS
 	if expectedSuccess {
 		checkDownloadStatusEvents(extraDownloadingEventsCount, statuses, t)
 		if copyArtifacts == "" {
@@ -349,8 +349,8 @@ func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient
 	// Try to execute a simple install operation.
 	feature.installHandler(sua, feature.su)
 
-	statuses = pullStatusChanges(mc, 8+extraDownloadingEventsCount) // STARTED, DOWNLOADING, DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED,
-	// INSTALLING, INSTALLING(100), INSTALLED, FINISHED_SUCCESS
+	statuses = pullStatusChanges(mc, 8+extraDownloadingEventsCount) // STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED(100),
+	// INSTALLING(0), INSTALLING(100), INSTALLED(100), FINISHED_SUCCESS
 	if expectedSuccess {
 		checkInstallStatusEvents(extraDownloadingEventsCount, statuses, t)
 	} else {
@@ -372,7 +372,7 @@ func checkDownloadFailedStatusEvents(actualStatuses []interface{}, t *testing.T)
 	var expectedStatuses []interface{}
 	expectedStatuses = append(expectedStatuses,
 		createStatus(hawkbit.StatusStarted, nil, noMessage),
-		createStatus(hawkbit.StatusDownloading, nil, noMessage),
+		createStatus(hawkbit.StatusDownloading, partialProgress, noMessage),
 		createStatus(hawkbit.StatusFinishedError, nil, anyErrorMessage),
 	)
 	checkStatusEvents(expectedStatuses, actualStatuses, t)
@@ -382,14 +382,14 @@ func checkDownloadStatusEvents(extraDownloadingEventsCount int, actualStatuses [
 	var expectedStatuses []interface{}
 	expectedStatuses = append(expectedStatuses,
 		createStatus(hawkbit.StatusStarted, nil, noMessage),
-		createStatus(hawkbit.StatusDownloading, nil, noMessage),
+		createStatus(hawkbit.StatusDownloading, partialProgress, noMessage),
 	)
 	for i := 0; i < extraDownloadingEventsCount; i++ {
-		expectedStatuses = append(expectedStatuses, createStatus(hawkbit.StatusDownloading, partialDownload, noMessage))
+		expectedStatuses = append(expectedStatuses, createStatus(hawkbit.StatusDownloading, partialProgress, noMessage))
 	}
 	expectedStatuses = append(expectedStatuses,
-		createStatus(hawkbit.StatusDownloading, completeDownload, noMessage),
-		createStatus(hawkbit.StatusDownloaded, completeDownload, noMessage),
+		createStatus(hawkbit.StatusDownloading, completeProgress, noMessage),
+		createStatus(hawkbit.StatusDownloaded, completeProgress, noMessage),
 		createStatus(hawkbit.StatusFinishedSuccess, nil, noMessage),
 	)
 	checkStatusEvents(expectedStatuses, actualStatuses, t)
@@ -399,17 +399,17 @@ func checkInstallStatusEvents(extraDownloadingEventsCount int, actualStatuses []
 	var expectedStatuses []interface{}
 	expectedStatuses = append(expectedStatuses,
 		createStatus(hawkbit.StatusStarted, nil, noMessage),
-		createStatus(hawkbit.StatusDownloading, nil, noMessage),
+		createStatus(hawkbit.StatusDownloading, partialProgress, noMessage),
 	)
 	for i := 0; i < extraDownloadingEventsCount; i++ {
-		expectedStatuses = append(expectedStatuses, createStatus(hawkbit.StatusDownloading, partialDownload, noMessage))
+		expectedStatuses = append(expectedStatuses, createStatus(hawkbit.StatusDownloading, partialProgress, noMessage))
 	}
 	expectedStatuses = append(expectedStatuses,
-		createStatus(hawkbit.StatusDownloading, completeDownload, noMessage),
-		createStatus(hawkbit.StatusDownloaded, completeDownload, noMessage),
-		createStatus(hawkbit.StatusInstalling, nil, noMessage),
-		createStatus(hawkbit.StatusInstalling, nil, "My final message!"),
-		createStatus(hawkbit.StatusInstalled, nil, "My final message!"),
+		createStatus(hawkbit.StatusDownloading, completeProgress, noMessage),
+		createStatus(hawkbit.StatusDownloaded, completeProgress, noMessage),
+		createStatus(hawkbit.StatusInstalling, partialProgress, noMessage),
+		createStatus(hawkbit.StatusInstalling, partialProgress, "My final message!"),
+		createStatus(hawkbit.StatusInstalled, completeProgress, "My final message!"),
 		createStatus(hawkbit.StatusFinishedSuccess, nil, "My final message!"),
 	)
 	checkStatusEvents(expectedStatuses, actualStatuses, t)

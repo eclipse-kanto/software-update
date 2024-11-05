@@ -132,6 +132,49 @@ func (su *SoftwareUpdatable) SetContextDependencies(deps ...*DependencyDescripti
 	return su.setProperty(suPropertyContextDependencies, su.status.ContextDependencies)
 }
 
+// MapLastOperation converts the OperationStatus into map interface
+// This enables the logging of last operation status with keys and values
+func MapLastOperation(LastOperationPtr *OperationStatus) map[string]interface{} {
+	lastOperationMap := make(map[string]interface{})
+	lastOperationMap[correlationIDParam] = LastOperationPtr.CorrelationID
+	lastOperationMap[statusParam] = LastOperationPtr.Status
+
+	if LastOperationPtr.SoftwareModule != nil {
+		lastOperationMap[softwareModuleParam] = map[string]interface{}{
+			softwareModuleNameParam:    LastOperationPtr.SoftwareModule.Name,
+			softwareModuleVersionParam: LastOperationPtr.SoftwareModule.Version,
+		}
+	}
+
+	if LastOperationPtr.Software != nil {
+		var softwareDependencies []map[string]interface{}
+		for _, values := range LastOperationPtr.Software {
+			dependency := map[string]interface{}{
+				softwareGroupParam:   values.Group,
+				softwareNameParam:    values.Name,
+				softwareVersionParam: values.Version,
+				softwareTypeParam:    values.Type,
+			}
+			softwareDependencies = append(softwareDependencies, dependency)
+		}
+		lastOperationMap[SoftwareParam] = softwareDependencies
+	}
+
+	if LastOperationPtr.Progress != nil {
+		lastOperationMap[progressParam] = *LastOperationPtr.Progress
+	}
+
+	if LastOperationPtr.Message != "" {
+		lastOperationMap[messageParam] = LastOperationPtr.Message
+	}
+
+	if LastOperationPtr.StatusCode != "" {
+		lastOperationMap[statusCodeParam] = LastOperationPtr.StatusCode
+	}
+
+	return lastOperationMap
+}
+
 // SetLastOperation set the last operation and last failed operation (if needed) of
 // underlying SoftwareUpdatable feature.
 // Note: Involking this function before the feature activation will change
@@ -146,9 +189,9 @@ func (su *SoftwareUpdatable) SetLastOperation(os *OperationStatus) error {
 	if os != nil && (os.Status == StatusFinishedError || os.Status == StatusFinishedRejected ||
 		os.Status == StatusCancelRejected) {
 		su.status.LastFailedOperation = su.status.LastOperation
-		if err := su.setProperty(suPropertyLastFailedOperation, su.status.LastFailedOperation); err != nil {
+		if err := su.setProperty(suPropertyLastFailedOperation, MapLastOperation(su.status.LastFailedOperation)); err != nil {
 			return err
 		}
 	}
-	return su.setProperty(suPropertyLastOperation, su.status.LastOperation)
+	return su.setProperty(suPropertyLastOperation, MapLastOperation(su.status.LastOperation))
 }

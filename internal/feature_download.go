@@ -76,6 +76,8 @@ func (f *ScriptBasedSoftwareUpdatable) downloadModule(
 	s := filepath.Join(toDir, storage.InternalStatusName)
 	var opError error
 	opErrorMsg := errRuntime
+	startProgress := 0
+	completeProgress := 100
 
 	// Process final operation status in defer to also catch potential panic calls.
 	defer func() {
@@ -119,11 +121,11 @@ Started:
 
 	// Downloading
 	logger.Debugf("[%s.%s] Downloading module", module.Name, module.Version)
-	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading))
+	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading).WithProgress(&startProgress))
 	storage.WriteLn(s, string(hawkbit.StatusDownloading))
 Downloading:
-	if opError = f.store.DownloadModule(toDir, module, func(percent int) {
-		setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading).WithProgress(percent))
+	if opError = f.store.DownloadModule(toDir, module, func(progress int) {
+		setLastOS(su, newOS(cid, module, hawkbit.StatusDownloading).WithProgress(&progress))
 	}, f.serverCert, f.downloadRetryCount, f.downloadRetryInterval, func() error {
 		return f.validateLocalArtifacts(module)
 	}); opError != nil {
@@ -134,7 +136,7 @@ Downloading:
 
 	// Downloaded
 	logger.Debugf("[%s.%s] Module download finished", module.Name, module.Version)
-	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloaded).WithProgress(100))
+	setLastOS(su, newOS(cid, module, hawkbit.StatusDownloaded).WithProgress(&completeProgress))
 	storage.WriteLn(s, string(hawkbit.StatusDownloaded))
 	return false
 }
