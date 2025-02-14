@@ -343,8 +343,8 @@ func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient
 	// Try to execute a simple download operation.
 	feature.downloadHandler(sua, feature.su)
 
-	statuses := pullStatusChanges(mc, false, 6+extraDownloadingEventsCount) // STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount),
-	                                                                        // DOWNLOADING(100), DOWNLOADED(100), FINISHED_SUCCESS, DOWNLOADED_FILE_STORED
+	// STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED(100), FINISHED_SUCCESS, DOWNLOADED_FILE_STORED
+	statuses := pullStatusChanges(mc, false, 6+extraDownloadingEventsCount)
 	if expectedSuccess {
 		checkDownloadStatusEvents(extraDownloadingEventsCount, statuses, t)
 		if copyArtifacts == "" {
@@ -358,10 +358,8 @@ func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient
 
 	// Try to execute a simple install operation.
 	feature.installHandler(sua, feature.su)
-
-	statuses = pullStatusChanges(mc, true, 8+extraDownloadingEventsCount) // STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount), 
-	                                                                      //DOWNLOADING(100), DOWNLOADED(100),
-	// INSTALLING(0), INSTALLING(100), INSTALLED(100), FINISHED_SUCCESS
+	// STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED(100), INSTALLING(0), INSTALLING(100), INSTALLED(100), FINISHED_SUCCESS
+	statuses = pullStatusChanges(mc, true, 8+extraDownloadingEventsCount)
 	if expectedSuccess {
 		checkInstallStatusEvents(extraDownloadingEventsCount, statuses, t)
 	} else {
