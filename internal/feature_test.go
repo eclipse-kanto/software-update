@@ -185,15 +185,18 @@ func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, 
 	postDisconnectEventCount := 3 // DOWNLOADING(100)/INSTALLING(100), DOWNLOADED(100)/INSTALLED(100), FINISHED_SUCCESS
 	if install {
 		preDisconnectEventCount = 5 // STARTED, DOWNLOADING(0), DOWNLOADING(100), DOWNLOADED(100), INSTALLING(0)
+	} else {
+		postDisconnectEventCount += 1 //DOWNLOADED_FILE_STORED
 	}
-	statuses := pullStatusChanges(mc, preDisconnectEventCount) // should go between DOWNLOADING/INSTALLING and next state
+
+	statuses := pullStatusChanges(mc, install, preDisconnectEventCount) // should go between DOWNLOADING/INSTALLING and next state
 
 	go func() { // decrements count number with 1, when disconnected
 		feature.Disconnect(false)
 		waitDisconnect.Done()
 	}()
 
-	statuses = append(statuses, pullStatusChanges(mc, postDisconnectEventCount)...)
+	statuses = append(statuses, pullStatusChanges(mc, install, postDisconnectEventCount)...)
 	waitDisconnect.Wait()
 	defer connectFeature(t, mc, feature, NewDefaultConfig().FeatureID)
 	if install {
@@ -310,13 +313,19 @@ func testScriptBasedSoftwareUpdatableOperationsLocal(t *testing.T, installDirs [
 	testDownloadInstall(feature, mc, artifacts, expectedSuccess, copyArtifacts, t)
 }
 
-func pullStatusChanges(mc *mockedClient, expectedCount int) []interface{} {
+func pullStatusChanges(mc *mockedClient, install bool, expectedCount int) []interface{} {
 	var statuses []interface{}
 	for i := 0; i < expectedCount; i++ {
 		lo := mc.pullLastOperationStatus()
 		statuses = append(statuses, lo)
-		if lo["status"] == string(hawkbit.StatusFinishedSuccess) || lo["status"] == string(hawkbit.StatusFinishedError) {
-			break
+		if install {
+			if lo["status"] == string(hawkbit.StatusFinishedSuccess) || lo["status"] == string(hawkbit.StatusFinishedError) {
+				break
+			}
+		} else {
+			if lo["status"] == string(hawkbit.StatusDownloadedFileStored) || lo["status"] == string(hawkbit.StatusFinishedError) {
+				break
+			}
 		}
 	}
 	return statuses
@@ -334,7 +343,8 @@ func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient
 	// Try to execute a simple download operation.
 	feature.downloadHandler(sua, feature.su)
 
-	statuses := pullStatusChanges(mc, 5+extraDownloadingEventsCount) // STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED(100), FINISHED_SUCCESS
+	statuses := pullStatusChanges(mc, false, 6+extraDownloadingEventsCount) // STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount),
+	                                                                        // DOWNLOADING(100), DOWNLOADED(100), FINISHED_SUCCESS, DOWNLOADED_FILE_STORED
 	if expectedSuccess {
 		checkDownloadStatusEvents(extraDownloadingEventsCount, statuses, t)
 		if copyArtifacts == "" {
@@ -349,7 +359,8 @@ func testDownloadInstall(feature *ScriptBasedSoftwareUpdatable, mc *mockedClient
 	// Try to execute a simple install operation.
 	feature.installHandler(sua, feature.su)
 
-	statuses = pullStatusChanges(mc, 8+extraDownloadingEventsCount) // STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount), DOWNLOADING(100), DOWNLOADED(100),
+	statuses = pullStatusChanges(mc, true, 8+extraDownloadingEventsCount) // STARTED, DOWNLOADING(0), DOWNLOADING(x extraDownloadingEventsCount), 
+	                                                                      //DOWNLOADING(100), DOWNLOADED(100),
 	// INSTALLING(0), INSTALLING(100), INSTALLED(100), FINISHED_SUCCESS
 	if expectedSuccess {
 		checkInstallStatusEvents(extraDownloadingEventsCount, statuses, t)
@@ -391,6 +402,7 @@ func checkDownloadStatusEvents(extraDownloadingEventsCount int, actualStatuses [
 		createStatus(hawkbit.StatusDownloading, completeProgress, noMessage),
 		createStatus(hawkbit.StatusDownloaded, completeProgress, noMessage),
 		createStatus(hawkbit.StatusFinishedSuccess, nil, noMessage),
+		createStatus(hawkbit.StatusDownloadedFileStored, nil, noMessage),
 	)
 	checkStatusEvents(expectedStatuses, actualStatuses, t)
 }

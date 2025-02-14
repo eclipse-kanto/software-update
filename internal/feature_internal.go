@@ -175,7 +175,7 @@ func (f *ScriptBasedSoftwareUpdatable) fail(cid string, modules []*hawkbit.Softw
 // newOS returns newly created OperationStatus pointer.
 func newOS(cid string, module *storage.Module, status hawkbit.Status) *hawkbit.OperationStatus {
 	return hawkbit.NewOperationStatusUpdate(cid, status,
-		&hawkbit.SoftwareModuleID{Name: module.Name, Version: module.Version})
+		&hawkbit.SoftwareModuleID{Name: module.Name, Version: module.Version, Path: module.Path})
 }
 
 // newFileOS returns newly created OperationStatus pointer, filled with the status file data.

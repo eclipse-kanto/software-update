@@ -140,10 +140,16 @@ func MapLastOperation(LastOperationPtr *OperationStatus) map[string]interface{} 
 	lastOperationMap[statusParam] = LastOperationPtr.Status
 
 	if LastOperationPtr.SoftwareModule != nil {
-		lastOperationMap[softwareModuleParam] = map[string]interface{}{
+		innerMap := map[string]interface{}{
 			softwareModuleNameParam:    LastOperationPtr.SoftwareModule.Name,
 			softwareModuleVersionParam: LastOperationPtr.SoftwareModule.Version,
 		}
+
+		if LastOperationPtr.SoftwareModule.Path != "" {
+			innerMap[softwareModuleStoredPath] = LastOperationPtr.SoftwareModule.Path
+		}
+
+		lastOperationMap[softwareModuleParam] = innerMap
 	}
 
 	if LastOperationPtr.Software != nil {
@@ -194,4 +200,9 @@ func (su *SoftwareUpdatable) SetLastOperation(os *OperationStatus) error {
 		}
 	}
 	return su.setProperty(suPropertyLastOperation, MapLastOperation(su.status.LastOperation))
+}
+
+// GetLastStatus returns the recorded last operation status
+func (su *SoftwareUpdatable) GetLastStatus() *softwareUpdatableStatus {
+	return su.status
 }
