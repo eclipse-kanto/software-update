@@ -203,6 +203,6 @@ func (su *SoftwareUpdatable) SetLastOperation(os *OperationStatus) error {
 }
 
 // GetLastStatus returns the recorded last operation status
-func (su *SoftwareUpdatable) GetLastStatus() *softwareUpdatableStatus {
-	return su.status
+func (su *SoftwareUpdatable) GetLastStatus() *OperationStatus {
+	return su.status.LastOperation
 }

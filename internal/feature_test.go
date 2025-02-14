@@ -186,7 +186,7 @@ func testDisconnectWhileRunningOperation(feature *ScriptBasedSoftwareUpdatable, 
 	if install {
 		preDisconnectEventCount = 5 // STARTED, DOWNLOADING(0), DOWNLOADING(100), DOWNLOADED(100), INSTALLING(0)
 	} else {
-		postDisconnectEventCount += 1 //DOWNLOADED_FILE_STORED
+		postDisconnectEventCount = 4 // DOWNLOADING(100), DOWNLOADED(100), FINISHED_SUCCESS, DOWNLOADED_FILE_STORED
 	}
 
 	statuses := pullStatusChanges(mc, install, preDisconnectEventCount) // should go between DOWNLOADING/INSTALLING and next state

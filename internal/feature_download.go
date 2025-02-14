@@ -52,7 +52,7 @@ func (f *ScriptBasedSoftwareUpdatable) downloadModules(
 	}
 
 	// Archive all modules.
-	if su.GetLastStatus().LastOperation.Status == hawkbit.StatusFinishedSuccess {
+	if su.GetLastStatus().Status == hawkbit.StatusFinishedSuccess {
 		for i, module := range updatable.Modules {
 			if err := f.store.ArchiveModule(filepath.Join(toDir, strconv.Itoa(i)), &module.Path); err != nil {
 				logger.Errorf("failed to archive module [%s.%s]: %v", module.Name, module.Version, err)
