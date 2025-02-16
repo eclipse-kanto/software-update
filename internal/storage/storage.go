@@ -58,6 +58,7 @@ type Updatable struct {
 type Module struct {
 	Name      string            `json:"name"`
 	Version   string            `json:"version"`
+	Path      string            `json:"path,omitempty"`
 	Artifacts []*Artifact       `json:"artifacts,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
@@ -212,12 +213,13 @@ func (st *Storage) MoveInstalledDeps(dir string, metadata map[string]string) err
 }
 
 // ArchiveModule to modules directory.
-func (st *Storage) ArchiveModule(dir string) error {
+func (st *Storage) ArchiveModule(dir string, dest *string) error {
 	logger.Debugf("Archive module from directory: %s", dir)
 	path, err := FindAvailableLocation(st.ModulesPath)
 	if err != nil {
 		return err
 	}
+	*dest = path
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return err
 	}

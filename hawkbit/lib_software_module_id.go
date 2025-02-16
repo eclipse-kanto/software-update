@@ -16,6 +16,7 @@ package hawkbit
 const (
 	softwareModuleNameParam    = "name"
 	softwareModuleVersionParam = "version"
+	softwareModuleStoredPath   = "path"
 )
 
 // SoftwareModuleID represents an unique identifier for software modules.
@@ -24,4 +25,6 @@ type SoftwareModuleID struct {
 	Name string `json:"name"`
 	// Version of the software module.
 	Version string `json:"version"`
+	// Stored downloaded file path
+	Path string `json:"path,omitempty"`
 }

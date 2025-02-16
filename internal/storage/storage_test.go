@@ -248,10 +248,11 @@ func TestDownloadArchiveModule(t *testing.T) {
 	existence(filepath.Join(path, art.FileName), true, "[initial download]", t)
 
 	// 2. Archive module.
+	storedPath := ""
 	if err := WriteLn(filepath.Join(path, InternalStatusName), m.Name+":"+m.Version); err != nil {
 		t.Fatalf("fail to write module id: %v", err)
 	}
-	if err := store.ArchiveModule(path); err != nil {
+	if err := store.ArchiveModule(path, &storedPath); err != nil {
 		t.Fatalf("fail to archive module: %v", err)
 	}
 	existence(filepath.Join(store.ModulesPath, "0", art.FileName), true, "[archive]", t)
